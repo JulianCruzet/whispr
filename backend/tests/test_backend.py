@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 
 import anthropic
@@ -6,6 +7,7 @@ import httpx
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 import app.photo as photo_module
 from app.config import Settings
@@ -38,6 +40,8 @@ class Backend:
         self.stop_reason = "end_turn"
         self.fail_search = False
         self.search_results = [{"title": "Laufey live", "properties": {"url": IMAGE_URL}}]
+        # Image bodies by URL; anything else gets a tiny unsized "image".
+        self.images: dict[str, bytes] = {}
         self.claude_requests = []
         self.jev_requests = []
 
@@ -68,7 +72,8 @@ class Backend:
             if self.fail_search:
                 return httpx.Response(500)
             return httpx.Response(200, json={"results": self.search_results})
-        return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=b"jpg")
+        body = self.images.get(str(request.url), b"jpg")
+        return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=body)
 
     def _claude(self, request: httpx2.Request) -> httpx2.Response:
         self.claude_requests.append(json.loads(request.content))
@@ -152,11 +157,23 @@ def test_jev_request_asks_all_four_questions_about_the_conversation():
 
 def test_never_coaches_on_the_wearers_own_words():
     backend = Backend()
-    backend.jev = jev_response(who="me", task="find_photo")
+    backend.jev = jev_response(who="me")
     events = run_line(backend, line("I saw her in Toronto."))
 
     assert types(events) == ["transcript"]
     assert backend.claude_requests == []
+
+
+def test_wearers_claim_gets_a_photo_but_no_reply_whisper():
+    backend = Backend(whisper_text="Drake Scotiabank Arena crowd")
+    backend.jev = jev_response(who="me", task="find_photo")
+    events = run_line(backend, line("I went to Drake's concert last night."))
+
+    assert types(events) == ["transcript", "task_started", "task_done", "whisper"]
+    assert events[-1]["reason"] == "task_done"
+    # The only Haiku call wrote the search query; nothing was written back at the wearer.
+    assert len(backend.claude_requests) == 1
+    assert "image search query" in backend.claude_requests[0]["system"]
 
 
 def test_explicit_speaker_overrides_jev():
@@ -524,3 +541,67 @@ def test_shared_token_is_enforced_when_set():
             == 200
         )
         assert client.get("/health").json()["jev_key"] is True
+
+
+def image_bytes(width: int, height: int) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (width, height), (180, 40, 90)).save(buffer, "JPEG")
+    return buffer.getvalue()
+
+
+def photo_search(*images: tuple[str, int, int]) -> dict:
+    """Run a photo task where search returns these (url, width, height) results in rank order."""
+    backend = Backend()
+    backend.search_results = [{"title": url, "properties": {"url": url}} for url, _, _ in images]
+    backend.images = {url: image_bytes(width, height) for url, width, height in images}
+    return done_event(backend)
+
+
+def test_search_prefers_a_vertical_phone_photo_over_a_higher_ranked_landscape():
+    done = photo_search(
+        ("https://img.example/wide.jpg", 1600, 900),
+        ("https://img.example/tall.jpg", 1080, 1920),
+    )
+
+    assert done["image_url"] == "https://img.example/tall.jpg"
+    assert done["portrait"] is True
+
+
+def test_search_uses_the_best_landscape_when_nothing_is_vertical():
+    done = photo_search(
+        ("https://img.example/first.jpg", 1600, 900),
+        ("https://img.example/second.jpg", 1200, 800),
+    )
+
+    assert done["image_url"] == "https://img.example/first.jpg"
+    assert done["portrait"] is False
+
+
+def test_search_skips_vertical_thumbnails_too_small_to_pass_for_a_phone_photo():
+    done = photo_search(
+        ("https://img.example/tiny.jpg", 200, 300),
+        ("https://img.example/wide.jpg", 1600, 900),
+    )
+
+    assert done["image_url"] == "https://img.example/wide.jpg"
+
+
+def test_unsized_images_still_count_but_rank_after_vertical_ones():
+    backend = Backend()
+    backend.search_results = [
+        {"properties": {"url": "https://img.example/mystery.jpg"}},
+        {"properties": {"url": "https://img.example/tall.jpg"}},
+    ]
+    backend.images = {"https://img.example/tall.jpg": image_bytes(900, 1600)}
+
+    assert done_event(backend)["image_url"] == "https://img.example/tall.jpg"
+
+
+def test_photo_query_asks_for_the_venue_and_a_crowd_shot():
+    backend = Backend()
+    done_event(backend)
+
+    system = next(r["system"] for r in backend.claude_requests if "image search query" in r["system"])
+    assert "Scotiabank Arena" in system
+    assert '"crowd"' in system
+

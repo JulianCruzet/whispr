@@ -94,7 +94,7 @@ The backend replies with `{ "type": "persona", "persona": "first_date" }`, or an
 **`task_done`** carries the photo to display. The `whisper` with reason `"task_done"` follows right after it.
 
 ```json
-{ "type": "task_done", "task_id": "cd34", "task": "find_photo", "ok": true, "image_url": "https://...", "title": "...", "query": "...", "used_fallback": false }
+{ "type": "task_done", "task_id": "cd34", "task": "find_photo", "ok": true, "image_url": "https://...", "title": "...", "query": "...", "used_fallback": false, "portrait": true }
 ```
 
 If `ok` is `false`, the other photo fields are missing and no whisper follows.
@@ -118,7 +118,9 @@ The wearer gets a `reply` whisper when all of these are true:
 - Jev's `should_whisper` is at least 0.7.
 - At least 5 seconds have passed since the last whisper.
 
-A photo task starts when the line came from `them` and Jev picks `find_photo` with at least 0.6 probability. It runs at most once every 30 seconds. Search has 5 seconds before the cached photo is used.
+A photo task starts when Jev picks `find_photo` with at least 0.6 probability, on a line from `them` ("you saw him live?") or from the wearer ("I went to Drake's concert last night"). The wearer's own lines never get a reply whisper, only the "photo's ready" one. It runs at most once every 30 seconds. Search has 5 seconds before the cached photo is used.
+
+**Which photo:** the query names the act and the venue (Scotiabank Arena for a Toronto concert or game unless another venue came up) and asks for crowd shots. Of the top 10 results that load, the best-ranked **vertical** photo at least 400 px on its short side wins, so it looks shot on a phone. If none is vertical, the best one that loads is used and `portrait` is `false` (the app crops it to portrait). Images are fetched with a phone browser's user agent, because many hosts refuse other clients.
 
 These values are in [app/config.py](app/config.py), and each can be overridden with an environment variable. The cover story is in [app/prompts.py](app/prompts.py).
 

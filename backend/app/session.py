@@ -105,11 +105,12 @@ class Session:
             }
         )
 
-        # Only coach after their turn, never on the wearer's own words.
-        if who_spoke != "them":
-            return
-        self._maybe_launch_task(decision)
-        await self._maybe_whisper(decision)
+        # The wearer's own claim ("I was at Drake last night") can call for proof,
+        # but only their turn gets coached: never whisper back at the wearer's own words.
+        if who_spoke in ("me", "them"):
+            self._maybe_launch_task(decision)
+        if who_spoke == "them":
+            await self._maybe_whisper(decision)
 
     async def _maybe_whisper(self, decision: Decision) -> None:
         settings = self.deps.settings
@@ -172,7 +173,7 @@ class Session:
         done = {"type": "task_done", "task_id": task_id, "task": "find_photo", "ok": False}
         try:
             await self.emit({"type": "task_started", "task_id": task_id, "task": "find_photo"})
-            query = settings.default_photo_query if persona.uses_cached_photo else self.history[-1]["text"]
+            query = self.history[-1]["text"]
             try:
                 query = (
                     await write_photo_query(
@@ -193,6 +194,8 @@ class Session:
                     "title": photo.title,
                     "query": query,
                     "used_fallback": photo.used_fallback,
+                    # False means a landscape (or unsized) photo; the app crops it to portrait.
+                    "portrait": photo.is_portrait,
                 }
         except Exception:
             log.exception("Photo task failed")
