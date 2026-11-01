@@ -17,6 +17,24 @@ struct ProofTask: Identifiable {
     var imageUrl: URL?
 }
 
+/// Who the wearer is playing. Raw values match backend/app/personas.py.
+enum Persona: String, CaseIterable, Identifiable {
+    case fan
+    case interview
+    case firstDate = "first_date"
+    case carSalesman = "car_salesman"
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .fan: "Superfan"
+        case .interview: "Job interview"
+        case .firstDate: "First date"
+        case .carSalesman: "Car salesman"
+        }
+    }
+}
+
 /// App state for the UI. Audio (ears & voice) plugs in via `startListening` / `stopListening`.
 @MainActor
 @Observable
@@ -81,6 +99,13 @@ final class AppModel {
         }
     }
 
+    var persona: Persona {
+        didSet {
+            UserDefaults.standard.set(persona.rawValue, forKey: "persona")
+            sendPersona()
+        }
+    }
+
     private let client = BackendClient()
     private let audio = AudioPipeline()
     private let callKit = FakeCallKit()
@@ -94,6 +119,7 @@ final class AppModel {
             ?? Bundle.main.object(forInfoDictionaryKey: "WhisprBackendURL") as? String
             ?? "ws://localhost:8787/ws"
         micSource = MicSource(rawValue: UserDefaults.standard.string(forKey: "micSource") ?? "") ?? .airpods
+        persona = Persona(rawValue: UserDefaults.standard.string(forKey: "persona") ?? "") ?? .fan
         panicCallerName = UserDefaults.standard.string(forKey: "panicCallerName") ?? "Mom"
         panicUsesCallKit = UserDefaults.standard.bool(forKey: "panicUsesCallKit")
         panicDelaySeconds = UserDefaults.standard.object(forKey: "panicDelaySeconds") as? Int ?? 0
@@ -268,6 +294,10 @@ final class AppModel {
     }
 
     /// The next sentence the wearer says teaches the backend how loud their own voice is.
+    private func sendPersona() {
+        client.send(json: ["type": "set_persona", "persona": persona.rawValue])
+    }
+
     func calibrate() {
         client.send(json: ["type": "calibrate"])
         calibration = .listening
@@ -286,6 +316,8 @@ final class AppModel {
             reconnectAttempt = 0
             calibration = .none
             lastError = nil
+            // A new backend session starts on the default persona.
+            sendPersona()
         case let .transcript(id, text, final, speaker):
             if final {
                 partial = ""

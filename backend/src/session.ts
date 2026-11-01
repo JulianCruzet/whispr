@@ -87,6 +87,7 @@ export class PhoneSession {
     if (msg.type === "ping") this.send({ type: "pong" });
     if (msg.type === "debug_turn" && msg.text) this.onTurn(msg.text, msg.speaker ?? "them");
     if (msg.type === "calibrate") this.calibrating = true;
+    if (msg.type === "set_persona" && msg.persona) this.brain.setPersona(msg.persona);
   }
 
   /** Lines within a few dB of the wearer's calibrated level are theirs; quieter ones are the other person. */
@@ -138,6 +139,9 @@ export class PhoneSession {
           imageUrl: event.image_url,
           caption: event.title ?? event.query,
         });
+        return;
+      case "persona":
+        console.log(`[${this.id.slice(0, 8)}] persona: ${event.persona}`);
         return;
       case "error":
         this.send({ type: "error", message: `Brain rejected a message: ${JSON.stringify(event.detail)}` });

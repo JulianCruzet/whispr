@@ -21,6 +21,7 @@ export type BrainEvent =
       query?: string;
       used_fallback?: boolean;
     }
+  | { type: "persona"; persona: string }
   | { type: "error"; detail: unknown };
 
 export interface BrainLinkEvents {
@@ -38,6 +39,8 @@ export class BrainLink extends EventEmitter {
   private closed = false;
   private reportedOffline = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  /** Sent again on every connect, because a restarted brain forgets it. */
+  private personaMessage: string | null = null;
 
   constructor(private sessionId: string) {
     super();
@@ -60,6 +63,12 @@ export class BrainLink extends EventEmitter {
     if (this.queue.length > MAX_QUEUED) this.queue.shift();
   }
 
+  /** Who the wearer is playing. Takes effect before any line still in the queue. */
+  setPersona(persona: string) {
+    this.personaMessage = JSON.stringify({ type: "set_persona", persona });
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(this.personaMessage);
+  }
+
   close() {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -77,6 +86,7 @@ export class BrainLink extends EventEmitter {
 
     ws.on("open", () => {
       this.reportedOffline = false;
+      if (this.personaMessage) ws.send(this.personaMessage);
       for (const message of this.queue) ws.send(message);
       this.queue = [];
     });

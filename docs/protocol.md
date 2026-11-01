@@ -10,6 +10,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `{"type":"hello","device":"iphone","sampleRate":16000}` on connect |
 | text | `{"type":"debug_turn","text":"...","speaker":"them"}`: pretend someone said `text` (skips speech-to-text). Testing and demo fallback |
 | text | `{"type":"calibrate"}`: the next line spoken is the wearer; the backend learns how loud their voice is |
+| text | `{"type":"set_persona","persona":"first_date"}`: who the wearer is playing: `fan` (default), `interview`, `first_date` or `car_salesman`. Send it on every `ready` and when it changes. Changing it clears the conversation so far |
 | text | `{"type":"ping"}` |
 
 ## Backend → phone

@@ -15,6 +15,8 @@ export type ClientMessage =
   | { type: "debug_turn"; text: string; speaker?: Speaker }
   /** The next line spoken is the wearer: learn how loud their voice is in the mic. */
   | { type: "calibrate" }
+  /** Who the wearer is playing: fan, interview, first_date or car_salesman. Default: fan. */
+  | { type: "set_persona"; persona: string }
   | { type: "ping" };
 
 // ---------- backend -> phone (and dashboards) ----------
