@@ -38,6 +38,17 @@ You're bluffing being a Drake fan with a *real* Drake fan.
 
 The whispered lines come from a real test run, and they change every time. To run the demo yourself, follow the [demo runbook](docs/demo-runbook.md).
 
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="./docs/images/whisper.jpg" alt="The main screen: the cue Whispr says in your ear, big, with the full line under it and the transcript below" width="200"/><br/><sub><b>In your ear</b><br/>What you hear, big, with the full line under it</sub></td>
+    <td align="center" width="25%"><img src="./docs/images/calibrate.jpg" alt="The calibration page: a 15 second step for you and one for them" width="200"/><br/><sub><b>Calibrate</b><br/>15 seconds each, so it knows who is who</sub></td>
+    <td align="center" width="25%"><img src="./docs/images/settings.jpg" alt="Settings: persona, voices, Take turns, microphone and speaker output" width="200"/><br/><sub><b>Settings</b><br/>Persona, Take turns, mic and speaker</sub></td>
+    <td align="center" width="25%"><img src="./docs/images/panic.jpg" alt="The Panic button's fake incoming call from Mom" width="200"/><br/><sub><b>Panic</b><br/>A fake call to get you out</sub></td>
+  </tr>
+</table>
+
+<p align="center"><em>Screenshots from the app, with a real whisper from a test line</em></p>
+
 ## 🧭 Overview
 
 Whispr is a lighthearted improv game for iPhone and headphones. It listens to your conversation, whispers the perfect next line into your ear, and goes and finds the proof when you're bluffing.
