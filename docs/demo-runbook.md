@@ -45,7 +45,7 @@ How to get Whispr running for the judges, and what to do when something breaks o
 | Error "Brain offline" | The Python brain isn't running: restart `./scripts/dev.sh` |
 | Their words don't appear | Settings → Listen with → **iPhone mic** (keep the phone between you), then recalibrate |
 | Whispers on your own lines | Tap **Calibrate my voice** again, speaking at your normal volume |
-| Whisper text shows but no sound | Check the route line above the button; reconnect the headphones, then Stop → Start listening |
+| Whisper text shows but no sound | Check the route line above the button; reconnect the headphones, then Stop → Start listening. If **Last error** in Settings mentions ElevenLabs, check your credits |
 | No photo | Without a search key the cached photo is used; make sure `backend/assets/fallback.jpg` or `FALLBACK_PHOTO_URL` is set |
 | Live transcription fails mid-demo | Use ⚙️ → Test buttons to fake the other person's line. The whisper and voice still work |
 | Panic doesn't ring out loud | Turn the volume up. The ringtone plays on the speaker even on silent |
