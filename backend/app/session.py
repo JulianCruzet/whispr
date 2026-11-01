@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 
 HISTORY_LINES = 12
 PHOTO_READY_WHISPER = "The photo's in your camera roll. Show them now."
+PHOTO_READY_SPOKEN = "Photo found. It's in your camera roll."
 
 Listener = Callable[[dict], Awaitable[None]]
 
@@ -124,7 +125,7 @@ class Session:
         previous_whisper_at = self.last_whisper_at
         self.last_whisper_at = now
         try:
-            text = await write_whisper(
+            whisper = await write_whisper(
                 self.deps.claude,
                 settings,
                 self._transcript_text(),
@@ -133,19 +134,25 @@ class Session:
             )
         except anthropic.APIError as exc:
             log.warning("Whisper call failed: %r", exc)
-            text = None
+            whisper = None
 
-        if not text:
+        if not whisper:
             self.last_whisper_at = previous_whisper_at
             return
-        await self._send_whisper(text, reason="reply", cover_blown_risk=decision.cover_blown_risk)
+        await self._send_whisper(
+            whisper.text, whisper.spoken, reason="reply", cover_blown_risk=decision.cover_blown_risk
+        )
 
-    async def _send_whisper(self, text: str, reason: str, cover_blown_risk: float | None) -> None:
+    async def _send_whisper(
+        self, text: str, spoken: str, reason: str, cover_blown_risk: float | None
+    ) -> None:
         await self.emit(
             {
                 "type": "whisper",
                 "id": uuid.uuid4().hex,
+                # `text` goes on the screen; `spoken` is what the gateway says in the ear.
                 "text": text,
+                "spoken": spoken,
                 "reason": reason,
                 "cover_blown_risk": cover_blown_risk,
             }
@@ -210,4 +217,6 @@ class Session:
         if done["ok"]:
             # Skips the cooldown: this is the payoff line and it can't wait for a later turn.
             self.last_whisper_at = time.monotonic()
-            await self._send_whisper(PHOTO_READY_WHISPER, reason="task_done", cover_blown_risk=None)
+            await self._send_whisper(
+                PHOTO_READY_WHISPER, PHOTO_READY_SPOKEN, reason="task_done", cover_blown_risk=None
+            )
