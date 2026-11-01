@@ -35,6 +35,7 @@ struct SettingsView: View {
                             Text("10 seconds").tag(10)
                         }
                         Toggle("Ring when Whispr is closed", isOn: $model.panicUsesCallKit)
+                            .tint(Theme.up)
                     } header: {
                         Text("Panic button")
                     } footer: {
@@ -63,21 +64,23 @@ struct SettingsView: View {
                     }
                     if let error = model.lastError {
                         Section("Last error") {
-                            Text(error).foregroundStyle(Theme.brick)
+                            Text(error).foregroundStyle(Theme.down)
                         }
                     }
                 }
-                .listRowBackground(Color.white)
+                .listRowBackground(Theme.surface)
             }
             .scrollContentBackground(.hidden)
-            .background(Theme.linen.ignoresSafeArea())
+            .background(Theme.bg.ignoresSafeArea())
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.bg, for: .navigationBar)
             .toolbar {
                 Button("Done") { dismiss() }
                     .fontWeight(.semibold)
             }
         }
-        .tint(Theme.graphite)
-        .preferredColorScheme(.light)
+        .tint(Theme.text)
+        .preferredColorScheme(.dark)
     }
 }

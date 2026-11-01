@@ -1,29 +1,29 @@
 import SwiftUI
 
-/// Mission screen. Read at a glance mid-conversation: the line to say is the biggest,
-/// darkest thing on it; everything else stays quiet.
+/// Mission screen. Read at a glance mid-conversation: the line to say is the one big
+/// reading; everything else is quiet greys, with colour only for good or bad.
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showSettings = false
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             header
             lineCard
             if model.listening {
-                CoverMeter(risk: model.risk)
+                CoverReading(risk: model.risk)
                 calibration
             }
             transcript
             proof
             controls
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 12)
-        .background(Theme.paper.ignoresSafeArea())
-        .preferredColorScheme(.light)
+        .background(Theme.bg.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .fullScreenCover(isPresented: .constant(model.showsFakeCallScreen)) { FakeCallView() }
         .overlay(alignment: .top) { panicCountdown }
@@ -34,23 +34,25 @@ struct ContentView: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Whispr")
-                    .font(Theme.serif(.largeTitle))
-                    .foregroundStyle(Theme.graphite)
-                LabelText("Playing \(model.persona.label)")
+                    .font(.system(size: 22, weight: .semibold))
+                    .tracking(-0.4)
+                    .foregroundStyle(Theme.text)
+                LabelText(model.persona.label)
             }
             Spacer()
-            ConnectionPill(connection: model.connection)
+            ConnectionChip(connection: model.connection, listening: model.listening)
             Button {
                 showSettings = true
             } label: {
                 Image(systemName: "slider.horizontal.3")
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Theme.graphite)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(Theme.linen))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.text2)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Theme.surface))
+                    .overlay(Circle().strokeBorder(Theme.line, lineWidth: 1))
             }
             .accessibilityLabel("Settings")
         }
@@ -61,7 +63,7 @@ struct ContentView: View {
     private var lineCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                LabelText("In your ear", color: Theme.cream.opacity(0.65))
+                LabelText("In your ear")
                 Spacer()
                 if model.speaking {
                     VoiceBars(animated: !reduceMotion)
@@ -71,23 +73,26 @@ struct ContentView: View {
             Group {
                 if let whisper = model.currentWhisper {
                     Text(whisper)
-                        .font(Theme.serif(.title))
-                        .foregroundStyle(Theme.cream)
+                        .font(Theme.display)
+                        .tracking(-0.9)
+                        .lineSpacing(-2)
+                        .foregroundStyle(Theme.text)
                         .id(whisper)
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
+                        .transition(reduceMotion ? .opacity : Theme.rise)
                 } else {
                     Text(model.listening ? "Listening. Your next line shows up here." : "Start listening when the conversation begins.")
-                        .font(Theme.serif(.title2))
-                        .foregroundStyle(Theme.cream.opacity(0.55))
+                        .font(.system(size: 20, weight: .medium))
+                        .tracking(-0.4)
+                        .foregroundStyle(Theme.muted)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
             .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(24)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.bronze))
-        .animation(.easeOut(duration: 0.35), value: model.currentWhisper)
-        .animation(.easeOut(duration: 0.2), value: model.speaking)
+        .padding(18)
+        .background(CardBackground())
+        .animation(Theme.appear, value: model.currentWhisper)
+        .animation(Theme.appear, value: model.speaking)
         .accessibilityElement(children: .combine)
     }
 
@@ -101,7 +106,7 @@ struct ContentView: View {
             } label: {
                 Label("Calibrate voices", systemImage: "person.2.wave.2")
             }
-            .buttonStyle(PillButtonStyle(kind: .quiet))
+            .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
         case let .failed(who):
             Button {
                 model.calibrate(who)
@@ -109,23 +114,23 @@ struct ContentView: View {
                 Label(who == .me ? "Didn't catch you. Try again" : "Didn't catch them. Try again",
                       systemImage: "arrow.clockwise")
             }
-            .buttonStyle(PillButtonStyle(kind: .quiet))
+            .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
         case let .sampling(who):
             CalibrationPrompt(
-                step: who == .me ? "1 of 2" : "2 of 2",
+                step: who == .me ? "1/2" : "2/2",
                 text: who == .me ? "Say one sentence in your normal voice" : "Have them say one sentence"
             )
         case .needThem:
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Button {
                     model.calibrate(.them)
                 } label: {
                     Label("Now their voice", systemImage: "person.wave.2")
                 }
-                .buttonStyle(PillButtonStyle(kind: .quiet))
+                .buttonStyle(PillButtonStyle(kind: .primary, height: 40))
                 Button("Skip") { model.skipCalibratingThem() }
-                    .buttonStyle(PillButtonStyle(kind: .secondary))
-                    .frame(width: 92)
+                    .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
+                    .frame(width: 84)
             }
         case .done:
             EmptyView()
@@ -137,19 +142,22 @@ struct ContentView: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(model.lines) { line in
-                        TranscriptRow(line: line).id(line.id)
+                        TranscriptRow(line: line)
+                            .id(line.id)
+                            .transition(reduceMotion ? .opacity : Theme.rise)
                     }
                     if !model.partial.isEmpty {
                         TranscriptRow.partial(model.partial).id("partial")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(Theme.appear, value: model.lines.count)
             }
             .scrollIndicators(.hidden)
             .onChange(of: model.lines.count) {
-                withAnimation(reduceMotion ? nil : .easeOut) { proxy.scrollTo(model.lines.last?.id, anchor: .bottom) }
+                withAnimation(reduceMotion ? nil : Theme.appear) { proxy.scrollTo(model.lines.last?.id, anchor: .bottom) }
             }
         }
     }
@@ -158,45 +166,46 @@ struct ContentView: View {
 
     @ViewBuilder private var proof: some View {
         if !model.tasks.isEmpty || model.lastPhoto != nil {
-            HStack(alignment: .center, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
                 if let photo = model.lastPhoto {
                     Image(uiImage: photo)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 60, height: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .frame(width: 54, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .accessibilityLabel("Proof photo")
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     if let task = model.tasks.last {
                         Text(task.done ? (model.lastPhoto == nil ? "No photo this time" : "Photo found") : task.label)
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(Theme.graphite)
+                            .font(Theme.emphasis)
+                            .foregroundStyle(Theme.text)
                             .lineLimit(1)
                     }
                     if model.lastPhotoSaved {
-                        Label("Saved to Photos", systemImage: "checkmark")
-                            .font(Theme.label)
-                            .foregroundStyle(Theme.moss)
+                        MetaText("saved to photos", color: Theme.up)
+                    } else if model.tasks.last?.done == false {
+                        MetaText("searching…")
                     }
                 }
                 Spacer(minLength: 0)
             }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.stone, lineWidth: 1))
+            .padding(12)
+            .background(CardBackground())
+            .transition(Theme.rise)
         }
     }
 
     // MARK: Controls
 
     private var controls: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             if model.listening && !model.route.isEmpty {
-                LabelText(model.route)
+                MetaText(model.route)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Button(model.listening ? "Stop" : "Start listening") { model.toggleListening() }
                     .buttonStyle(PillButtonStyle(kind: model.listening ? .secondary : .primary))
                     .disabled(model.connection != .connected)
@@ -207,7 +216,7 @@ struct ContentView: View {
                     Label("Panic", systemImage: "phone.fill")
                 }
                 .buttonStyle(PillButtonStyle(kind: .alarm))
-                .frame(width: 128)
+                .frame(width: 120)
                 .disabled(model.panic != .idle)
             }
         }
@@ -216,43 +225,49 @@ struct ContentView: View {
     @ViewBuilder private var panicCountdown: some View {
         if case let .countdown(secondsLeft) = model.panic {
             HStack {
-                Text("\(model.panicCallerName) calls in \(secondsLeft)")
-                    .font(.headline.monospacedDigit())
+                Text("\(model.panicCallerName) calls in")
+                    .font(Theme.emphasis)
+                MetaText("\(secondsLeft)s", color: Theme.text)
                 Spacer()
                 Button("Cancel") { model.cancelPanic() }
-                    .font(.headline)
+                    .font(Theme.emphasis)
             }
-            .foregroundStyle(Theme.paper)
-            .padding(16)
-            .background(Capsule().fill(Theme.charcoal))
+            .foregroundStyle(Theme.text)
             .padding(.horizontal, 16)
+            .frame(height: 48)
+            .background(Capsule().fill(Theme.surface2))
+            .overlay(Capsule().strokeBorder(Theme.lineStrong, lineWidth: 1))
+            .padding(.horizontal, 16)
+            .transition(Theme.rise)
         }
     }
 }
 
 // MARK: - Pieces
 
-private struct ConnectionPill: View {
+/// Live / connecting / offline. The dot pulses while listening.
+private struct ConnectionChip: View {
     let connection: AppModel.Connection
+    let listening: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
+        HStack(spacing: 4) {
+            PulsingDot(color: color, pulsing: connection == .connected && listening)
             Text(label)
                 .font(Theme.label)
-                .foregroundStyle(Theme.graphite)
+                .foregroundStyle(Theme.text2)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Theme.linen))
+        .padding(.leading, 6)
+        .padding(.trailing, 12)
+        .frame(height: 30)
+        .background(Capsule().fill(Theme.surface))
+        .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 
     private var label: String {
         switch connection {
-        case .connected: "Live"
+        case .connected: listening ? "Listening" : "Live"
         case .connecting: "Connecting"
         case .disconnected: "Offline"
         }
@@ -260,37 +275,39 @@ private struct ConnectionPill: View {
 
     private var color: Color {
         switch connection {
-        case .connected: Theme.moss
-        case .connecting: Theme.pebble
-        case .disconnected: Theme.brick
+        case .connected: Theme.up
+        case .connecting: Theme.muted
+        case .disconnected: Theme.down
         }
     }
 }
 
-/// How close the wearer is to being caught, from the brain's risk score.
-private struct CoverMeter: View {
+/// How close the wearer is to being caught, as a reading: green while it holds, red when blown.
+private struct CoverReading: View {
     let risk: Double
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                LabelText("Cover")
-                Spacer()
-                Text(verdict)
-                    .font(Theme.label)
-                    .foregroundStyle(risk >= 0.67 ? Theme.brick : Theme.graphite)
-            }
+        HStack(spacing: 12) {
+            LabelText("Cover")
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.stone)
+                    Capsule().fill(Theme.line)
                     Capsule()
-                        .fill(risk >= 0.67 ? Theme.brick : Theme.graphite)
-                        .frame(width: max(4, geometry.size.width * min(max(risk, 0), 1)))
+                        .fill(color)
+                        .frame(width: max(3, geometry.size.width * min(max(risk, 0), 1)))
                 }
             }
             .frame(height: 3)
+            Text(verdict)
+                .font(Theme.label)
+                .foregroundStyle(color)
+                .padding(.horizontal, 8)
+                .frame(height: 22)
+                .background(Capsule().fill(tint))
+            MetaText(String(format: "%.2f", min(max(risk, 0), 1)))
+                .frame(width: 34, alignment: .trailing)
         }
-        .animation(.easeOut(duration: 0.4), value: risk)
+        .animation(Theme.appear, value: risk)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Cover \(verdict)")
     }
@@ -302,37 +319,82 @@ private struct CoverMeter: View {
         default: "Blown"
         }
     }
+
+    private var color: Color {
+        switch risk {
+        case ..<0.34: Theme.up
+        case ..<0.67: Theme.text2
+        default: Theme.down
+        }
+    }
+
+    private var tint: Color {
+        switch risk {
+        case ..<0.34: Theme.upTint
+        case ..<0.67: Theme.surface2
+        default: Theme.downTint
+        }
+    }
 }
 
-/// Cream sound bars on the bronze panel while Roxy is talking.
+/// The calibration step in progress.
+private struct CalibrationPrompt: View {
+    let step: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "waveform")
+                .foregroundStyle(Theme.text2)
+            Text(text)
+                .font(Theme.emphasis)
+                .foregroundStyle(Theme.text)
+            Spacer(minLength: 0)
+            MetaText(step)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface2))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+    }
+}
+
+/// Bars while Roxy is talking, in the text grey.
 private struct VoiceBars: View {
     let animated: Bool
 
     var body: some View {
         TimelineView(.animation(paused: !animated)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 3) {
+            HStack(alignment: .center, spacing: 2.5) {
                 ForEach(0..<5) { i in
                     Capsule()
-                        .fill(Theme.cream.opacity(0.85))
-                        .frame(width: 3, height: animated ? 6 + 12 * abs(sin(t * 7 + Double(i) * 0.9)) : 10)
+                        .fill(Theme.text2)
+                        .frame(width: 2.5, height: animated ? 5 + 11 * abs(sin(t * 7 + Double(i) * 0.9)) : 9)
                 }
             }
-            .frame(height: 18)
+            .frame(height: 16)
         }
         .accessibilityLabel("Speaking")
     }
 }
 
-/// One line of the conversation, separated by hairlines. Their lines read at full weight;
-/// the wearer's are muted.
+/// One line of the conversation: time, who, what. Their lines in full white; the wearer's muted.
 private struct TranscriptRow: View {
+    let time: String
     let speaker: String
     let text: String
     let muted: Bool
     var italic = false
 
+    private static let clock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
     init(line: TranscriptLine) {
+        time = Self.clock.string(from: line.at)
         switch line.speaker {
         case .me: speaker = "You"
         case .them: speaker = "Them"
@@ -343,6 +405,7 @@ private struct TranscriptRow: View {
     }
 
     private init(partial: String) {
+        time = "··:··:··"
         speaker = ""
         text = partial
         muted = true
@@ -352,36 +415,18 @@ private struct TranscriptRow: View {
     static func partial(_ text: String) -> TranscriptRow { TranscriptRow(partial: text) }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            LabelText(speaker)
-                .frame(width: 40, alignment: .leading)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            MetaText(time)
+            LabelText(speaker, color: muted ? Theme.muted : Theme.text2)
+                .frame(width: 34, alignment: .leading)
             Text(text)
+                .font(Theme.body)
                 .italic(italic)
-                .foregroundStyle(muted ? Theme.pebble : Theme.graphite)
+                .foregroundStyle(muted ? Theme.text2 : Theme.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(Theme.stone).frame(height: 0.5) }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(muted ? .clear : Theme.surface))
     }
 }
-
-/// The calibration step in progress: which sentence we're waiting for.
-private struct CalibrationPrompt: View {
-    let step: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-            Text(text)
-            Spacer(minLength: 0)
-            LabelText(step)
-        }
-        .font(.body.weight(.medium))
-        .foregroundStyle(Theme.graphite)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 15)
-        .background(Capsule().strokeBorder(Theme.stone, lineWidth: 1))
-    }
-}
-
