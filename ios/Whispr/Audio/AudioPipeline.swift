@@ -172,6 +172,24 @@ final class AudioPipeline: @unchecked Sendable {
     }
 
     /// Queue PCM16 mono little-endian whisper audio; plays as soon as it arrives.
+    /// Whisper buffers scheduled but not yet heard. Streaming finishes well before playback,
+    /// so this, not the stream, says whether the ear is still busy.
+    private let queuedLock = NSLock()
+    private var queuedBuffers = 0
+    var isPlayingWhisper: Bool { queuedLock.withLock { queuedBuffers > 0 } }
+
+    /// Calls `reached` once playback gets to this point in the queue: the start of the whisper
+    /// that streams next. The card switches to that line then, so it matches what's heard.
+    func markPlayback(_ reached: @escaping @Sendable () -> Void) {
+        guard let marker = AVAudioPCMBuffer(pcmFormat: playerFormat, frameCapacity: 1),
+              let out = marker.floatChannelData?[0]
+        else { return reached() }
+        marker.frameLength = 1
+        out[0] = 0
+        player.scheduleBuffer(marker, completionCallbackType: .dataPlayedBack) { _ in reached() }
+        if engine.isRunning && !player.isPlaying { player.play() }
+    }
+
     func play(_ data: Data) {
         var bytes = data
         if let carry = playbackCarry {
@@ -191,7 +209,11 @@ final class AudioPipeline: @unchecked Sendable {
                 out[i] = Float(Int16(littleEndian: raw.loadUnaligned(fromByteOffset: i * 2, as: Int16.self))) / 32768
             }
         }
-        player.scheduleBuffer(buffer)
+        queuedLock.withLock { queuedBuffers += 1 }
+        player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            guard let self else { return }
+            self.queuedLock.withLock { self.queuedBuffers = max(0, self.queuedBuffers - 1) }
+        }
         if engine.isRunning {
             if !player.isPlaying { player.play() }
         } else {
