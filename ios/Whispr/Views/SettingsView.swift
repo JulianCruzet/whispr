@@ -29,6 +29,15 @@ struct SettingsView: View {
                         Text("If your headphones don't pick up the other person, use the iPhone mic. Whispr still talks in your headphones.")
                     }
                     Section {
+                        Picker("Play Whispr on", selection: $model.phoneOutput) {
+                            ForEach(PhoneOutput.allCases) { Text($0.label).tag($0) }
+                        }
+                    } header: {
+                        Text("Without headphones")
+                    } footer: {
+                        Text("Headphones always come first. On the iPhone speaker, the other person hears Whispr too, and the mic pauses while it talks.")
+                    }
+                    Section {
                         TextField("Caller name", text: $model.panicCallerName)
                         Picker("Rings after", selection: $model.panicDelaySeconds) {
                             Text("Right away").tag(0)

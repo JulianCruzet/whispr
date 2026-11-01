@@ -57,7 +57,7 @@ Whispr is a lighthearted improv game for iPhone and headphones. It listens to yo
 | **Live transcript** | ElevenLabs Scribe transcribes as people talk, and finished lines are labelled YOU or THEM |
 | **Fast on questions** | A line ending in a question goes out after 300 ms instead of waiting for about 0.6 s of silence |
 | **Knows who's talking** | You each say one sentence to calibrate, then a voiceprint of every line tells your voice from theirs, even at equal volume. If it isn't sure, Jev decides from the words |
-| **Whispers in your ear** | ElevenLabs Flash speaks each line through your headphones, one at a time and never over each other |
+| **Whispers in your ear** | ElevenLabs Flash speaks each line through your headphones, one at a time and never over each other. With no headphones connected, choose the iPhone's top speaker or its main speaker, where the mic pauses while it talks |
 | **Your choice of mic** | Listen with your headphones, or switch to the iPhone mic if they can't hear the other person |
 
 ### 🧠 Brain

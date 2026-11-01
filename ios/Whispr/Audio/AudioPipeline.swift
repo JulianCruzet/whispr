@@ -1,6 +1,7 @@
 // EARS & VOICE (owner: Julian + Claude)
 // Captures the conversation as PCM16 mono 16 kHz for the backend, and plays the
-// whisper audio (PCM16 mono) that streams back, into the AirPods.
+// whisper audio (PCM16 mono) that streams back, into the headphones, or out of the
+// iPhone's top or bottom speaker when none are connected.
 
 import AVFoundation
 
@@ -13,6 +14,17 @@ enum MicSource: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
     var label: String { self == .airpods ? "Headphones mic" : "iPhone mic" }
+}
+
+/// Where whispers play when no headphones are connected.
+enum PhoneOutput: String, CaseIterable, Identifiable {
+    /// The earpiece at the top of the phone: quiet, so only the wearer hears it.
+    case topSpeaker
+    /// The loudspeaker: the other person hears it too.
+    case speaker
+
+    var id: String { rawValue }
+    var label: String { self == .topSpeaker ? "Top speaker" : "iPhone speaker" }
 }
 
 enum AudioPipelineError: LocalizedError {
@@ -39,18 +51,25 @@ final class AudioPipeline: @unchecked Sendable {
     private var pendingMic = Data()
     private var playbackCarry: UInt8?
     private var micSource: MicSource = .airpods
+    private var phoneOutput: PhoneOutput = .topSpeaker
+    /// When the whisper queued on the speaker finishes. Touched by both audio threads.
+    private var speakerWhisperEndsAt = Date.distantPast
+    private let whisperLock = NSLock()
     private var configObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
     private static let chunkBytes = 3200 // 100 ms at 16 kHz, 16-bit
+    /// Keep the mic shut this long after a whisper, for the speaker to fall quiet.
+    private static let speakerTail: TimeInterval = 0.3
 
     init() {
         engine.attach(player)
         engine.connect(player, to: engine.mainMixerNode, format: playerFormat)
     }
 
-    func start(micSource: MicSource) async throws {
+    func start(micSource: MicSource, phoneOutput: PhoneOutput) async throws {
         guard await AVAudioApplication.requestRecordPermission() else { throw AudioPipelineError.micPermissionDenied }
         self.micSource = micSource
+        self.phoneOutput = phoneOutput
         try configureSession()
         try startEngine()
 
@@ -123,18 +142,35 @@ final class AudioPipeline: @unchecked Sendable {
         }
         player.scheduleBuffer(buffer)
         if engine.isRunning && !player.isPlaying { player.play() }
+        if Self.playingOnSpeaker { extendSpeakerWhisper(by: Double(frames) / playerFormat.sampleRate) }
+    }
+
+    private static var playingOnSpeaker: Bool {
+        AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+    }
+
+    private func extendSpeakerWhisper(by seconds: TimeInterval) {
+        whisperLock.lock()
+        defer { whisperLock.unlock() }
+        speakerWhisperEndsAt = max(speakerWhisperEndsAt, Date()).addingTimeInterval(seconds)
+    }
+
+    /// The mic would hear the speaker, and Whispr would coach itself.
+    private var speakerWhisperIsAudible: Bool {
+        whisperLock.lock()
+        defer { whisperLock.unlock() }
+        return Date() < speakerWhisperEndsAt.addingTimeInterval(Self.speakerTail)
     }
 
     // MARK: Setup
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        switch micSource {
-        case .airpods:
-            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
-        case .iphone:
-            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
-        }
+        var options: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP]
+        if micSource == .airpods { options.insert(.allowBluetoothHFP) }
+        // Only applies with no headphones connected; they still take priority.
+        if phoneOutput == .speaker { options.insert(.defaultToSpeaker) }
+        try session.setCategory(.playAndRecord, mode: .default, options: options)
         try session.setActive(true)
 
         // Picking the input also picks the output: choosing the headphones' mic
@@ -170,7 +206,7 @@ final class AudioPipeline: @unchecked Sendable {
     }
 
     private func forwardMic(_ buffer: AVAudioPCMBuffer) {
-        guard let converter else { return }
+        guard let converter, !speakerWhisperIsAudible else { return }
         let ratio = micFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
         guard let out = AVAudioPCMBuffer(pcmFormat: micFormat, frameCapacity: capacity) else { return }
