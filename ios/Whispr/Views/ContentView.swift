@@ -60,11 +60,19 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         if let photo = model.lastPhoto {
-            Image(uiImage: photo)
-                .resizable()
-                .scaledToFit()
-                .frame(maxHeight: 160)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            HStack(alignment: .bottom, spacing: 12) {
+                Image(uiImage: photo)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                if model.lastPhotoSaved {
+                    Label("Saved to Photos", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

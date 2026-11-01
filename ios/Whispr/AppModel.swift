@@ -57,6 +57,8 @@ final class AppModel {
     var calibration: Calibration = .none
 
     var lastPhoto: UIImage?
+    /// Whether lastPhoto made it into the camera roll.
+    var lastPhotoSaved = false
 
     // MARK: Panic button state
 
@@ -198,6 +200,8 @@ final class AppModel {
             try await audio.start(micSource: micSource)
             listening = true
             lastError = nil
+            // Before the conversation starts, so the Photos prompt never interrupts it.
+            await PhotoSaver.requestAccessIfNeeded()
             // Auto-lock mid-conversation would cut the mic.
             UIApplication.shared.isIdleTimerDisabled = true
             route = AudioPipeline.routeDescription()
@@ -355,8 +359,19 @@ final class AppModel {
     }
 
     private func savePhoto(_ url: URL) async {
+        let image: UIImage
         do {
-            lastPhoto = try await PhotoSaver.save(from: url)
+            image = try await PhotoSaver.download(from: url)
+        } catch {
+            lastError = error.localizedDescription
+            return
+        }
+        // Show it right away, even if saving to the camera roll fails.
+        lastPhoto = image
+        lastPhotoSaved = false
+        do {
+            try await PhotoSaver.addToLibrary(image)
+            lastPhotoSaved = true
         } catch {
             lastError = error.localizedDescription
         }
