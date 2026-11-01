@@ -13,12 +13,17 @@
   [![Claude](https://img.shields.io/badge/Claude-Haiku_5.5-D97757)](https://www.anthropic.com/claude)
   [![ElevenLabs](https://img.shields.io/badge/ElevenLabs-Scribe_+_Flash-000000)](https://elevenlabs.io/)
 
-  Built at LarpHacks 2026 · [Quick Start](#-quick-start) · [Demo runbook](docs/demo-runbook.md) · [Protocol](docs/protocol.md)
+  Built at LarpHacks 2026 · [Demo video](https://www.youtube.com/watch?v=WMQa3FV8oWw) · [Quick Start](#-quick-start) · [Demo runbook](docs/demo-runbook.md) · [Protocol](docs/protocol.md)
 </div>
 
 ---
 
 ## 🎬 Demo
+
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=WMQa3FV8oWw"><img src="https://img.youtube.com/vi/WMQa3FV8oWw/maxresdefault.jpg" alt="Watch the Whispr demo video on YouTube" width="800"/></a>
+  <p><em>Watch the demo on YouTube</em></p>
+</div>
 
 You're bluffing being a Laufey fan with a *real* Laufey fan.
 
