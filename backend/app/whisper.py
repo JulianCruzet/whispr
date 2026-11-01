@@ -27,7 +27,10 @@ async def _complete(
 
 def clean_line(text: str) -> str:
     lines = text.splitlines()
-    return lines[0].strip().strip('"“”') if lines else ""
+    if not lines:
+        return ""
+    # Haiku sometimes writes `Say: "..."`, which the voice would read out as "Say colon".
+    return re.sub(r'^Say:\s*["“]?', "Say ", lines[0].strip()).strip('"“”')
 
 
 def cap_words(line: str) -> str:
