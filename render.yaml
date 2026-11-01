@@ -3,6 +3,8 @@ services:
   - type: web
     name: whispr-brain
     runtime: python
+    region: virginia
+    plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -20,10 +22,13 @@ services:
         sync: false
 
   - type: web
-    name: whispr-gateway
+    name: whispr
     runtime: node
+    region: virginia
+    plan: free
     rootDir: backend
-    buildCommand: npm ci && npm run build
+    # tsc is a dev dependency, so install it even when NODE_ENV=production.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -33,9 +38,7 @@ services:
         sync: false
       - key: APP_SHARED_TOKEN
         sync: false
-      # The gateway reaches the brain over Render's private network.
-      - key: BRAIN_HOSTPORT
-        fromService:
-          type: web
-          name: whispr-brain
-          property: hostport
+      # The brain's public address, e.g. wss://whispr-brain.onrender.com/ws.
+      # Not the private network: Free services can't receive private traffic.
+      - key: BRAIN_URL
+        sync: false

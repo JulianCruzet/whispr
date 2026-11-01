@@ -23,10 +23,21 @@ Set `FALLBACK_PHOTO_URL` or add a cached photo at `backend/assets/fallback.jpg`.
 
 ## Deploy on Render
 
-- **Root directory:** `backend`
+There are two web services, both with root directory `backend`. [`render.yaml`](../render.yaml) has the same settings.
+
+**Brain (`whispr-brain`)**
+
 - **Build command:** `pip install -r requirements.txt`
 - **Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- **Environment:** the keys from `.env.example`. `PUBLIC_BASE_URL` isn't needed because Render sets `RENDER_EXTERNAL_URL`.
+- **Environment:** `ANTHROPIC_API_KEY`, `JEV_API_KEY`, `BRAVE_SEARCH_API_KEY`, `FALLBACK_PHOTO_URL`, `APP_SHARED_TOKEN`. `PUBLIC_BASE_URL` isn't needed because Render sets `RENDER_EXTERNAL_URL`.
+
+**Audio gateway (`whispr`)**
+
+- **Build command:** `npm ci --include=dev && npm run build`
+- **Start command:** `npm start`
+- **Environment:** `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `APP_SHARED_TOKEN` (same value as the brain) and `BRAIN_URL` (`wss://<brain host>/ws`).
+
+The phone connects to the gateway at `wss://<gateway host>/ws`. Free services sleep when idle and can take 50 seconds or more to wake, so open both `/health` pages before a demo.
 
 ## API for the app
 
