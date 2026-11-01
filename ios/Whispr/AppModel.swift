@@ -74,6 +74,13 @@ final class AppModel {
         case done(bothVoices: Bool)
     }
     var calibration: Calibration = .none
+    /// How much speech each calibration step collects: quick (a few seconds), or 15 s each
+    /// from Settings, for a demo where it has to be exactly right.
+    enum CalibrationLength: Equatable {
+        case quick, demo
+        var seconds: Double? { self == .demo ? 15 : nil }
+    }
+    private(set) var calibrationLength: CalibrationLength = .quick
     /// The wearer chose to go on without the other person's sample; a reconnect keeps that.
     private var skippedThem = false
 
@@ -336,10 +343,23 @@ final class AppModel {
     }
 
     /// The next few lines `who` says become their voice sample.
-    func calibrate(_ who: Speaker) {
-        client.send(json: ["type": "calibrate", "who": who == .them ? "them" : "me"])
-        calibration = .sampling(who)
+    /// `length` switches between quick and demo calibration; left out, it keeps the last one,
+    /// so the other person's step matches the wearer's.
+    func calibrate(_ who: Speaker, length: CalibrationLength? = nil) {
+        if let length { calibrationLength = length }
+        var message: [String: Any] = ["type": "calibrate", "who": who == .them ? "them" : "me"]
+        if let seconds = calibrationLength.seconds { message["seconds"] = seconds }
+        client.send(json: message)
+        calibration = .sampling(who, target: calibrationLength.seconds)
         if who == .them { skippedThem = false }
+    }
+
+    /// From Settings: 15 s of `who` talking, listening first if it isn't yet.
+    func calibrateForDemo(_ who: Speaker) {
+        Task {
+            if !listening { await startListening() }
+            if listening { calibrate(who, length: .demo) }
+        }
     }
 
     /// Carry on with only the wearer's sample.

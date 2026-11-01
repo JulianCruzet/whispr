@@ -15,7 +15,8 @@ export type ClientMessage =
   /** Pretend someone said `text` (skips Scribe). For testing and as a demo fallback. */
   | { type: "debug_turn"; text: string; speaker?: Speaker }
   /** The next line spoken is `who` (default "me"): learn what their voice sounds like. */
-  | { type: "calibrate"; who?: "me" | "them" }
+  /** `seconds`: how much speech to collect (default ~4 s for me, ~3 s for them; up to 30). */
+  | { type: "calibrate"; who?: "me" | "them"; seconds?: number }
   /** Who the wearer is playing: fan, interview, first_date or car_salesman. Default: fan. */
   | { type: "set_persona"; persona: string }
   | { type: "ping" };

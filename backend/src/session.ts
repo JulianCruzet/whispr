@@ -18,6 +18,8 @@ import { speak, TTS_SAMPLE_RATE } from "./voice/tts.js";
 const CALIBRATION_TARGET_SECONDS: Record<Who, number> = { me: 4, them: 3 };
 /** ...and gives up after this many lines, keeping the sample if it has at least the minimum. */
 const CALIBRATION_MAX_LINES = 4;
+/** A longer calibration the phone asks for (say 15 s for a demo) is capped at this. */
+const CALIBRATION_LONGEST_SECONDS = 30;
 const CALIBRATION_MIN_SECONDS = 1.5;
 /** Without calibration, lines Jev is at least this sure about teach the gateway that voice. */
 const LEARN_MIN_P = 0.8;
@@ -41,7 +43,16 @@ export class PhoneSession {
   /** Tells the wearer from the other person, from samples taken by "calibrate". */
   private speakers = new SpeakerModel();
   /** Calibration in progress: whose voice, and the audio collected from their lines so far. */
-  private calibrating: { who: Who; audio: Buffer[]; lines: number; skipped: number; levels: number[] } | null = null;
+  private calibrating: {
+    who: Who;
+    target: number;
+    maxLines: number;
+    maxSkips: number;
+    audio: Buffer[];
+    lines: number;
+    skipped: number;
+    levels: number[];
+  } | null = null;
   /** Lines sent to the brain and not yet echoed back, to match its verdict to our transcript id. */
   /** Lines waiting for Jev's verdict; `audio` is kept for unplaced lines, to learn the voice. */
   private pendingLines: { id: string; text: string; speaker: Speaker; audio: Buffer | null }[] = [];
@@ -109,7 +120,21 @@ export class PhoneSession {
     if (msg.type === "ping") this.send({ type: "pong" });
     if (msg.type === "debug_turn" && msg.text) this.onTurn(msg.text, msg.speaker ?? "them");
     if (msg.type === "calibrate") {
-      this.calibrating = { who: msg.who === "them" ? "them" : "me", audio: [], lines: 0, skipped: 0, levels: [] };
+      const who: Who = msg.who === "them" ? "them" : "me";
+      const asked = Number(msg.seconds);
+      const long = Number.isFinite(asked) && asked > CALIBRATION_TARGET_SECONDS[who];
+      const target = long ? Math.min(asked, CALIBRATION_LONGEST_SECONDS) : CALIBRATION_TARGET_SECONDS[who];
+      // A long one runs as many lines as it takes, and lets the wearer prompt them more often.
+      this.calibrating = {
+        who,
+        target,
+        maxLines: long ? Math.ceil(target) * 2 : CALIBRATION_MAX_LINES,
+        maxSkips: long ? Math.max(2, Math.round(target / 3)) : 2,
+        audio: [],
+        lines: 0,
+        skipped: 0,
+        levels: [],
+      };
     }
     if (msg.type === "hello" && msg.deviceId) this.restoreSpeakers(msg.deviceId);
     if (msg.type === "set_persona" && msg.persona) this.brain.setPersona(msg.persona);
@@ -140,7 +165,7 @@ export class PhoneSession {
     // Their sample must not catch the wearer prompting them, so skip any line that isn't
     // clearly another voice: skipping one of theirs only costs a line. At most two, in case
     // the two voices are simply very alike.
-    if (sampling.who === "them" && sampling.skipped < 2 && print && this.speakers.couldBe("me", print)) {
+    if (sampling.who === "them" && sampling.skipped < sampling.maxSkips && print && this.speakers.couldBe("me", print)) {
       sampling.skipped++;
       console.log(`${tag} calibrating them: skipped a line in the wearer's voice`);
       this.onTurn(text, "me");
@@ -153,11 +178,11 @@ export class PhoneSession {
     sampling.lines++;
     const sample = sampling.audio.length ? voiceprint(Buffer.concat(sampling.audio)) : null;
     const seconds = sample?.seconds ?? 0;
-    const target = CALIBRATION_TARGET_SECONDS[sampling.who];
+    const { target } = sampling;
     this.send({ type: "calibrating", who: sampling.who, seconds, target });
     this.onTurn(text, sampling.who);
 
-    if (seconds < target && sampling.lines < CALIBRATION_MAX_LINES) return;
+    if (seconds < target && sampling.lines < sampling.maxLines) return;
     this.calibrating = null;
     const level = sampling.levels.length ? sampling.levels.reduce((a, b) => a + b, 0) / sampling.levels.length : null;
     // A "them" sample that is really the wearer would turn every line into a coin toss.
