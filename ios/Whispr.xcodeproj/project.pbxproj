@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		10328D3D721577D4A02DC5AC /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F536EF866E825A2FB88E15AB /* AudioPipeline.swift */; };
 		145E2758C7E5336AF753F841 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28CC77D1C103788D77193BB /* BackendClient.swift */; };
+		4AF99213F98672AD1647F28C /* PhotoSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24C07F7FD888884269C7AE8 /* PhotoSaver.swift */; };
 		526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCBD08640207C29B74FD832 /* SettingsView.swift */; };
 		71636C8764F8756C8941BC22 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE242502FC8B525741E68987 /* ContentView.swift */; };
 		9B87B3EC6C5649F3C07E8D82 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0598B5F96738C8C3AB0E399E /* AppModel.swift */; };
@@ -23,7 +25,9 @@
 		B184F395489DB9EBBE4591D2 /* WhisprApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisprApp.swift; sourceTree = "<group>"; };
 		CE242502FC8B525741E68987 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D28CC77D1C103788D77193BB /* BackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendClient.swift; sourceTree = "<group>"; };
+		E24C07F7FD888884269C7AE8 /* PhotoSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSaver.swift; sourceTree = "<group>"; };
 		F279AA67B8BFED73892EDB9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F536EF866E825A2FB88E15AB /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -33,6 +37,15 @@
 				FBDABBD6156DC2A025CF92FC /* Whispr */,
 				96230CA5A2FC481FB0F28D46 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		852B256F4D2175EC50A17DA5 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				F536EF866E825A2FB88E15AB /* AudioPipeline.swift */,
+				E24C07F7FD888884269C7AE8 /* PhotoSaver.swift */,
+			);
+			path = Audio;
 			sourceTree = "<group>";
 		};
 		96230CA5A2FC481FB0F28D46 /* Products */ = {
@@ -67,6 +80,7 @@
 				0598B5F96738C8C3AB0E399E /* AppModel.swift */,
 				F279AA67B8BFED73892EDB9A /* Info.plist */,
 				B184F395489DB9EBBE4591D2 /* WhisprApp.swift */,
+				852B256F4D2175EC50A17DA5 /* Audio */,
 				F2534694EFA040633D5A637F /* Net */,
 				F5E72131B2E609C006B3E68B /* Views */,
 			);
@@ -133,8 +147,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B87B3EC6C5649F3C07E8D82 /* AppModel.swift in Sources */,
+				10328D3D721577D4A02DC5AC /* AudioPipeline.swift in Sources */,
 				145E2758C7E5336AF753F841 /* BackendClient.swift in Sources */,
 				71636C8764F8756C8941BC22 /* ContentView.swift in Sources */,
+				4AF99213F98672AD1647F28C /* PhotoSaver.swift in Sources */,
 				B5C7730C67C341FBA1B68303 /* Protocol.swift in Sources */,
 				526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */,
 				C6EE94F9CDEE6E78502C19A5 /* WhisprApp.swift in Sources */,
