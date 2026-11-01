@@ -11,6 +11,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `{"type":"debug_turn","text":"...","speaker":"them"}`: pretend someone said `text` (skips speech-to-text). Testing and demo fallback |
 | text | `{"type":"calibrate","who":"me"}` or `"who":"them"`: the next lines spoken are that person's; the backend listens across up to 4 lines until the wearer has talked ~6 s or the other person ~5 s (from Scribe's word times), and takes a voice sample. `who` defaults to `me`. `"seconds":15` asks for a longer sample (up to 30 s; the app's Settings uses 15 for a demo) |
 | text | `{"type":"clear_calibration"}`: forget both voice samples, calibrated or learnt, for this phone |
+| text | `{"type":"cancel_calibration"}`: stop a calibration step in progress, keeping nothing. Nothing said during calibration ever reaches the brain or the conversation |
 | text | `{"type":"set_persona","persona":"first_date"}`: who the wearer is playing: `fan` (default), `interview`, `first_date` or `car_salesman`. Send it on every `ready` and when it changes. Changing it clears the conversation so far |
 | text | `{"type":"ping"}` |
 

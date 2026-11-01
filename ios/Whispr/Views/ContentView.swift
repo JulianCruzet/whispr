@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showSettings = false
+    @State private var showCalibration = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -13,7 +14,6 @@ struct ContentView: View {
             lineCard
             if model.listening {
                 CoverReading(risk: model.risk)
-                calibration
             }
             transcript
             proof
@@ -42,9 +42,14 @@ struct ContentView: View {
                 LabelText(model.persona.label)
             }
             Spacer()
-            if !model.calibratedVoices.isEmpty {
+            Button {
+                showCalibration = true
+            } label: {
                 VoicesChip(voices: model.calibratedVoices)
-                    .transition(.opacity)
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showCalibration) {
+                NavigationStack { CalibrationView() }
             }
             ConnectionChip(connection: model.connection, listening: model.listening)
             Button {
@@ -98,63 +103,6 @@ struct ContentView: View {
         .animation(Theme.appear, value: model.currentWhisper)
         .animation(Theme.appear, value: model.speaking)
         .accessibilityElement(children: .combine)
-    }
-
-    // MARK: Calibration
-
-    @ViewBuilder private var calibration: some View {
-        switch model.calibration {
-        case .none:
-            Button {
-                model.calibrate(.me, length: .quick)
-            } label: {
-                Label("Calibrate voices", systemImage: "person.2.wave.2")
-            }
-            .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
-        case .failed(.me, _):
-            Button {
-                model.calibrate(.me)
-            } label: {
-                Label("Didn't catch enough of you. Try again", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
-        case let .failed(_, soundedLikeYou):
-            HStack(spacing: 8) {
-                Button {
-                    model.calibrate(.them)
-                } label: {
-                    Label(soundedLikeYou ? "That was you. Get them talking" : "Didn't catch them. Try again",
-                          systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
-                Button("Skip") { model.skipCalibratingThem() }
-                    .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
-                    .frame(width: 84)
-            }
-        case let .sampling(who, heard, target):
-            CalibrationPrompt(
-                step: who == .me ? "1/2" : "2/2",
-                text: model.calibrationLength == .demo
-                    ? (who == .me ? "Talk normally until the bar fills" : "Get them talking until the bar fills")
-                    : (who == .me ? "Talk for a few seconds in your normal voice" : "Get them talking for a few seconds"),
-                heard: heard,
-                target: target
-            )
-        case .needThem:
-            HStack(spacing: 8) {
-                Button {
-                    model.calibrate(.them)
-                } label: {
-                    Label("Now their voice", systemImage: "person.wave.2")
-                }
-                .buttonStyle(PillButtonStyle(kind: .primary, height: 40))
-                Button("Skip") { model.skipCalibratingThem() }
-                    .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
-                    .frame(width: 84)
-            }
-        case .done:
-            EmptyView()
-        }
     }
 
     // MARK: Transcript
@@ -308,6 +256,7 @@ private struct ConnectionChip: View {
 }
 
 /// Whose voices are calibrated: green when both are, so who said what is decided by voice.
+/// With none, it's the way into calibration.
 private struct VoicesChip: View {
     let voices: Set<Speaker>
 
@@ -315,9 +264,9 @@ private struct VoicesChip: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: both ? "person.2.wave.2.fill" : "person.wave.2.fill")
+            Image(systemName: both ? "person.2.wave.2.fill" : voices.isEmpty ? "person.2.wave.2" : "person.wave.2.fill")
                 .font(.system(size: 11, weight: .semibold))
-            Text(both ? "Voices" : voices.contains(.me) ? "You" : "Them")
+            Text(both ? "Voices" : voices.isEmpty ? "Calibrate" : voices.contains(.me) ? "You" : "Them")
                 .font(Theme.label)
         }
         .foregroundStyle(both ? Theme.up : Theme.text2)
@@ -326,7 +275,7 @@ private struct VoicesChip: View {
         .background(Capsule().fill(both ? Theme.upTint : Theme.surface))
         .overlay(Capsule().strokeBorder(both ? Theme.up.opacity(0.45) : Theme.line, lineWidth: 1))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(both ? "Both voices calibrated" : voices.contains(.me) ? "Your voice calibrated" : "Their voice calibrated")
+        .accessibilityLabel(both ? "Both voices calibrated" : voices.isEmpty ? "Calibrate voices" : voices.contains(.me) ? "Your voice calibrated" : "Their voice calibrated")
     }
 }
 
@@ -463,7 +412,7 @@ private struct PhotoViewer: View {
 }
 
 /// The calibration step in progress, with how much of the person's speech it has heard.
-private struct CalibrationPrompt: View {
+struct CalibrationPrompt: View {
     let step: String
     let text: String
     let heard: Double

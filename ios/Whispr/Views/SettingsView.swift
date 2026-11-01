@@ -20,24 +20,12 @@ struct SettingsView: View {
                         Text("Who Whispr coaches you to be. Changing it starts a new scene.")
                     }
                     Section {
-                        Button("Calibrate my voice · 15 s") {
-                            model.calibrateForDemo(.me)
-                            dismiss()
-                        }
-                        Button("Calibrate their voice · 15 s") {
-                            model.calibrateForDemo(.them)
-                            dismiss()
-                        }
-                        Button("Clear calibrated voices", role: .destructive) {
-                            model.clearCalibration()
-                        }
-                        .disabled(model.calibratedVoices.isEmpty)
+                        NavigationLink("Calibrate voices") { CalibrationView() }
                     } header: {
-                        Text("Voices for the demo")
+                        Text("Voices")
                     } footer: {
-                        Text("15 seconds of each of you talking normally, so Whispr knows exactly who is who. Do yours first; the main screen shows the bar filling as you talk. Clear them before new people calibrate.")
+                        Text("Before the demo: 15 seconds of each of you talking, so Whispr knows exactly who is who.")
                     }
-                    .disabled(model.connection != .connected)
                     Section {
                         Picker("Listen with", selection: $model.micSource) {
                             ForEach(MicSource.allCases) { Text($0.label).tag($0) }

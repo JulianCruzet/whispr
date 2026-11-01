@@ -84,8 +84,9 @@ export class PhoneSession {
     private publicBaseUrl = `http://localhost:${config.port}`,
   ) {
     this.scribe.on("partial", (text) => {
-      this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" });
+      // Calibration is set apart from the conversation: only its progress goes to the phone.
       if (this.calibrating) this.liveProgress();
+      else this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" });
     },
     );
     this.scribe.on("committed", (text, segment) => this.onCommitted(text, segment));
@@ -151,6 +152,7 @@ export class PhoneSession {
         lastProgressAt: 0,
       };
     }
+    if (msg.type === "cancel_calibration") this.calibrating = null;
     if (msg.type === "clear_calibration") {
       this.calibrating = null;
       this.speakers.reset();
@@ -193,7 +195,6 @@ export class PhoneSession {
       console.log(`${tag} calibrating them: skipped a line in the wearer's voice`);
       // The live bar counted this line; put it back.
       this.send({ type: "calibrating", who: sampling.who, seconds: sampling.talked, target: sampling.target });
-      this.onTurn(text, "me");
       return;
     }
 
@@ -207,8 +208,9 @@ export class PhoneSession {
     // `seconds` is speech in the sample itself (pauses and breaths don't count).
     const seconds = sample?.seconds ?? 0;
     const { target, talked } = sampling;
+    // Never sent to the brain: calibration is practice talk, not the conversation, and
+    // a line from "them" there would get a whisper.
     this.send({ type: "calibrating", who: sampling.who, seconds: talked, target });
-    this.onTurn(text, sampling.who);
 
     if (talked < target && sampling.lines < sampling.maxLines) return;
     this.calibrating = null;
