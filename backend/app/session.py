@@ -1,0 +1,189 @@
+import asyncio
+import logging
+import time
+import uuid
+from collections import deque
+from collections.abc import Awaitable, Callable, Coroutine
+from dataclasses import dataclass
+
+import anthropic
+import httpx
+
+from app.config import Settings
+from app.events import TranscriptIn
+from app.jev import Decision, decide
+from app.photo import find_photo
+from app.prompts import SCENARIO
+from app.whisper import write_photo_query, write_whisper
+
+log = logging.getLogger(__name__)
+
+HISTORY_LINES = 12
+PHOTO_READY_WHISPER = "Photo's on your phone. Show them now."
+
+Listener = Callable[[dict], Awaitable[None]]
+
+
+@dataclass
+class Deps:
+    settings: Settings
+    http: httpx.AsyncClient
+    claude: anthropic.AsyncAnthropic
+
+
+class Session:
+    def __init__(self, deps: Deps) -> None:
+        self.deps = deps
+        self.history: deque[dict] = deque(maxlen=HISTORY_LINES)
+        self.listeners: set[Listener] = set()
+        self.tasks: set[asyncio.Task] = set()
+        self.last_whisper_at = float("-inf")
+        self.last_photo_at = float("-inf")
+        self.photo_in_flight = False
+
+    async def emit(self, event: dict) -> None:
+        for listener in list(self.listeners):
+            try:
+                await listener(event)
+            except Exception:
+                log.info("Dropping a disconnected listener")
+                self.listeners.discard(listener)
+
+    def spawn(self, coro: Coroutine) -> asyncio.Task:
+        task = asyncio.create_task(coro)
+        self.tasks.add(task)
+        task.add_done_callback(self._task_finished)
+        return task
+
+    def _task_finished(self, task: asyncio.Task) -> None:
+        self.tasks.discard(task)
+        if not task.cancelled() and task.exception():
+            log.error("Background task crashed", exc_info=task.exception())
+
+    def _transcript_text(self) -> str:
+        return "\n".join(f"[{line['speaker']}] {line['text']}" for line in self.history)
+
+    def _jev_state(self) -> str:
+        return f"{SCENARIO}\n\nConversation so far, oldest first:\n{self._transcript_text()}"
+
+    async def handle_transcript(self, msg: TranscriptIn) -> None:
+        text = msg.text.strip()
+        if not msg.is_final or not text:
+            return
+
+        line = {"speaker": msg.speaker or "unknown", "text": text}
+        self.history.append(line)
+
+        try:
+            decision = await decide(self.deps.http, self.deps.settings, self._jev_state())
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            log.warning("Jev call failed, skipping this line: %r", exc)
+            await self.emit(
+                {"type": "transcript", "text": text, "who_spoke": msg.speaker, "cover_blown_risk": None}
+            )
+            return
+
+        who_spoke = msg.speaker if msg.speaker in ("me", "them") else decision.who_spoke
+        line["speaker"] = who_spoke
+        await self.emit(
+            {
+                "type": "transcript",
+                "text": text,
+                "who_spoke": who_spoke,
+                "cover_blown_risk": decision.cover_blown_risk,
+            }
+        )
+
+        # Only coach after their turn, never on the wearer's own words.
+        if who_spoke != "them":
+            return
+        self._maybe_launch_task(decision)
+        await self._maybe_whisper(decision)
+
+    async def _maybe_whisper(self, decision: Decision) -> None:
+        settings = self.deps.settings
+        now = time.monotonic()
+        if decision.should_whisper < settings.should_whisper_threshold:
+            return
+        if now - self.last_whisper_at < settings.whisper_cooldown_s:
+            return
+
+        # Claimed before the await so a line arriving mid-call can't double-whisper.
+        previous_whisper_at = self.last_whisper_at
+        self.last_whisper_at = now
+        try:
+            text = await write_whisper(
+                self.deps.claude,
+                settings,
+                self._transcript_text(),
+                photo_coming=self.photo_in_flight,
+            )
+        except anthropic.APIError as exc:
+            log.warning("Whisper call failed: %r", exc)
+            text = None
+
+        if not text:
+            self.last_whisper_at = previous_whisper_at
+            return
+        await self._send_whisper(text, reason="reply", cover_blown_risk=decision.cover_blown_risk)
+
+    async def _send_whisper(self, text: str, reason: str, cover_blown_risk: float | None) -> None:
+        await self.emit(
+            {
+                "type": "whisper",
+                "id": uuid.uuid4().hex,
+                "text": text,
+                "reason": reason,
+                "cover_blown_risk": cover_blown_risk,
+            }
+        )
+
+    def _maybe_launch_task(self, decision: Decision) -> None:
+        settings = self.deps.settings
+        # look_up_fact is a stretch goal, so Jev can pick it but nothing runs yet.
+        if decision.launch_task != "find_photo":
+            return
+        if decision.launch_probability < settings.launch_task_threshold:
+            return
+        now = time.monotonic()
+        if self.photo_in_flight or now - self.last_photo_at < settings.photo_cooldown_s:
+            return
+
+        self.photo_in_flight = True
+        self.last_photo_at = now
+        self.spawn(self._run_photo_task())
+
+    async def _run_photo_task(self) -> None:
+        settings = self.deps.settings
+        task_id = uuid.uuid4().hex
+        done = {"type": "task_done", "task_id": task_id, "task": "find_photo", "ok": False}
+        try:
+            await self.emit({"type": "task_started", "task_id": task_id, "task": "find_photo"})
+            query = settings.default_photo_query
+            try:
+                query = (
+                    await write_photo_query(self.deps.claude, settings, self._transcript_text())
+                    or query
+                )
+            except anthropic.APIError as exc:
+                log.warning("Photo query call failed, using the default: %r", exc)
+
+            photo = await find_photo(self.deps.http, settings, query)
+            if photo:
+                done |= {
+                    "ok": True,
+                    "image_url": photo.image_url,
+                    "title": photo.title,
+                    "query": query,
+                    "used_fallback": photo.used_fallback,
+                }
+        except Exception:
+            log.exception("Photo task failed")
+        finally:
+            self.photo_in_flight = False
+
+        await self.emit(done)
+        if done["ok"]:
+            # Skips the cooldown: this is the payoff line and it can't wait for a later turn.
+            self.last_whisper_at = time.monotonic()
+            await self._send_whisper(PHOTO_READY_WHISPER, reason="task_done", cover_blown_risk=None)
