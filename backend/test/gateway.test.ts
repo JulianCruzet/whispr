@@ -276,6 +276,48 @@ describe("photo-ready alert", () => {
   });
 });
 
+describe("what goes in the ear", () => {
+  test("the short cue is spoken while the full line goes to the screen", async () => {
+    const { config } = await import("../src/config.js");
+    const spoken: string[] = [];
+    const realFetch = globalThis.fetch;
+    const realKey = config.elevenlabs.apiKey;
+    // Stands in for ElevenLabs: records the text and returns a moment of silence.
+    config.elevenlabs.apiKey = "test";
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (!String(url).startsWith("https://api.elevenlabs.io/")) return realFetch(url, init);
+      spoken.push(JSON.parse(String(init?.body)).text);
+      return new Response(new Uint8Array(480));
+    }) as typeof fetch;
+    try {
+      brain.reply = () => [
+        {
+          type: "whisper",
+          id: "line",
+          text: "Say the Toronto crowd was lit and God's Plan was the high point.",
+          spoken: "Crowd was lit, God's Plan.",
+          reason: "reply",
+          cover_blown_risk: null,
+        },
+        // An older brain sends no `spoken`: the ear gets the line itself.
+        { type: "whisper", id: "old", text: "Say hold on.", reason: "reply", cover_blown_risk: null },
+      ];
+      const { phone } = newSession();
+      phone.say({ type: "debug_turn", text: "how was the show?", speaker: "them" });
+      await until(() => phone.events("whisper_audio_end").length === 2);
+
+      assert.deepEqual(
+        phone.events("whisper").map((e) => e.text),
+        ["Say the Toronto crowd was lit and God's Plan was the high point.", "Say hold on."],
+      );
+      assert.deepEqual(spoken, ["Crowd was lit, God's Plan.", "Say hold on."]);
+    } finally {
+      globalThis.fetch = realFetch;
+      config.elevenlabs.apiKey = realKey;
+    }
+  });
+});
+
 /** Plays `pcm` into a session as if the phone sent it and Scribe committed it as one line. */
 function speakInto(session: unknown, text: string, pcm: Buffer) {
   const scribe = (session as any).scribe;

@@ -9,7 +9,8 @@ import type { Speaker } from "./protocol.js";
 
 export type BrainEvent =
   | { type: "transcript"; text: string; who_spoke: string | null; cover_blown_risk: number | null }
-  | { type: "whisper"; id: string; text: string; reason: "reply" | "task_done"; cover_blown_risk: number | null }
+  /** `text` is shown on the phone; `spoken` (a few words) is said in the ear. */
+  | { type: "whisper"; id: string; text: string; spoken?: string; reason: "reply" | "task_done"; cover_blown_risk: number | null }
   | { type: "task_started"; task_id: string; task: string }
   | {
       type: "task_done";

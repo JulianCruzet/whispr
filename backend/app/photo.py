@@ -16,7 +16,8 @@ BRAVE_IMAGES_URL = "https://api.search.brave.com/res/v1/images/search"
 SEARCH_COUNT = 20
 # Top results checked at once. Each is read only until its size is known.
 PROBE_COUNT = 10
-PROBE_TIMEOUT_S = 2.5
+# A host that slow would make the phone wait too; the other results answer well within it.
+PROBE_TIMEOUT_S = 1.5
 # Enough to reach the size in any JPEG, PNG or WebP header, even behind a big EXIF block.
 MAX_PROBE_BYTES = 512 * 1024
 # At least this much taller than wide counts as a vertical phone photo.
@@ -187,11 +188,15 @@ async def _search(
         for result in response.json().get("results", [])
         if result.get("properties", {}).get("url", "").startswith("https://")
     ][:PROBE_COUNT]
-    results = await _rank_by_jev(http, settings, query, results)
-
-    probes = await asyncio.gather(*(_probe(http, r["properties"]["url"]) for r in results))
+    # Jev's ranking and the size checks each need only the search results, so run them together.
+    ranked, probes = await asyncio.gather(
+        _rank_by_jev(http, settings, query, results),
+        asyncio.gather(*(_probe(http, r["properties"]["url"]) for r in results)),
+    )
+    size_of = {id(result): probe for result, probe in zip(results, probes)}
     candidates: list[tuple[Photo, str]] = []
-    for result, probe in zip(results, probes):
+    for result in ranked:
+        probe = size_of[id(result)]
         if probe is None:
             continue
         width, height = probe if probe != UNKNOWN_SIZE else (None, None)
@@ -207,11 +212,17 @@ async def _search(
     if claude is None or not preferred:
         return preferred[0][0] if preferred else None
 
+    # Haiku looks at the top few at once, and the best one it doesn't reject goes out as soon
+    # as its answer is in, without waiting on the others.
     looked = preferred[:LOOK_COUNT]
-    verdicts = await asyncio.gather(*(_looks_right(claude, settings, query, thumb) for _, thumb in looked))
-    for (photo, _), verdict in zip(looked, verdicts):
-        if verdict is not False:
-            return photo
+    looks = [asyncio.create_task(_looks_right(claude, settings, query, thumb)) for _, thumb in looked]
+    try:
+        for (photo, _), look in zip(looked, looks):
+            if await look is not False:
+                return photo
+    finally:
+        for look in looks:
+            look.cancel()
     log.info("Haiku rejected the top %d photos for %r", len(looked), query)
     return None
 

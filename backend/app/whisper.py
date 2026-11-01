@@ -1,4 +1,5 @@
 import re
+from typing import NamedTuple
 
 import anthropic
 
@@ -7,6 +8,15 @@ from app.personas import DEFAULT_PERSONA, Persona
 from app.prompts import PHOTO_COMING_NOTE, photo_query_system, whisper_system
 
 MAX_WHISPER_WORDS = 15
+# The ear gets a short cue: a long line spoken mid-conversation is hard to follow.
+MAX_SPOKEN_WORDS = 7
+
+
+class Whisper(NamedTuple):
+    text: str
+    """The line on the screen, starting with "Say"."""
+    spoken: str
+    """The few words spoken in the ear."""
 
 
 async def _complete(
@@ -14,7 +24,7 @@ async def _complete(
 ) -> str | None:
     response = await client.messages.create(
         model=settings.whisper_model,
-        max_tokens=60,
+        max_tokens=90,
         thinking={"type": "disabled"},
         output_config={"effort": "low"},
         system=system,
@@ -25,18 +35,29 @@ async def _complete(
     return "".join(block.text for block in response.content if block.type == "text").strip()
 
 
+# "1. ", "Ear:" and the like, in case Haiku labels its two lines anyway.
+_LABEL = re.compile(r"^(?:\d[.)]\s+|(?:screen|ear|card|line \d)\s*:\s*)+", re.IGNORECASE)
+
+
 def clean_line(text: str) -> str:
     lines = text.splitlines()
     if not lines:
         return ""
+    line = _LABEL.sub("", lines[0].strip())
     # Haiku sometimes writes `Say: "..."`, which the voice would read out as "Say colon".
-    return re.sub(r'^Say:\s*["“]?', "Say ", lines[0].strip()).strip('"“”')
+    return re.sub(r'^Say:\s*["“]?', "Say ", line).strip('"“”')
 
 
-def cap_words(line: str) -> str:
+def clean_cue(text: str) -> str:
+    """The ear line: no label, quotes or leading "Say (that)"."""
+    cue = re.sub(r"^Say(?: that)?\b[:,]?\s*", "", clean_line(text), flags=re.IGNORECASE).strip('"“” ')
+    return cue[:1].upper() + cue[1:]
+
+
+def cap_words(line: str, limit: int = MAX_WHISPER_WORDS) -> str:
     words = line.split()
-    capped = " ".join(words[:MAX_WHISPER_WORDS])
-    if len(words) <= MAX_WHISPER_WORDS:
+    capped = " ".join(words[:limit])
+    if len(words) <= limit:
         return capped
     # Over the cap: end on the last clause that fits, so it doesn't stop mid-sentence.
     # The mark must end a word, so a number like 2.5 isn't taken for the end of a sentence.
@@ -50,12 +71,18 @@ async def write_whisper(
     transcript: str,
     photo_coming: bool = False,
     persona: Persona = DEFAULT_PERSONA,
-) -> str | None:
+) -> Whisper | None:
     content = f"{transcript}\n\n{PHOTO_COMING_NOTE}" if photo_coming else transcript
     text = await _complete(client, settings, whisper_system(persona), content)
-    if not text:
+    lines = [line for line in (text or "").splitlines() if line.strip()]
+    if not lines:
         return None
-    return cap_words(clean_line(text)) or None
+    shown = cap_words(clean_line(lines[0]))
+    if not shown:
+        return None
+    # If Haiku wrote only one line, the ear gets the whole thing, as before.
+    spoken = cap_words(clean_cue(lines[1]), MAX_SPOKEN_WORDS) if len(lines) > 1 else ""
+    return Whisper(shown, spoken or shown)
 
 
 async def write_photo_query(

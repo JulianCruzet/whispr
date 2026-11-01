@@ -20,7 +20,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `ready` `{sessionId, integrations}`: sent on connect; `integrations` says which services are live vs. mock |
 | text | `transcript` `{id, text, final, speaker}`: `final:false` is a live partial (id `"partial"`), `final:true` is a finished turn. `speaker` is `me` / `them` / `unknown` (see below) |
 | text | `whisper` `{id, text, reason}`: `reason` `reply` is the line to say (show it big); `photo_ready` means the proof photo just landed (show it with the photo, and keep the line) |
-| text | `whisper_audio_start` `{id, sampleRate}` → binary frames → `whisper_audio_end` `{id}`: the spoken whisper, PCM16 mono at `sampleRate` (24 kHz) |
+| text | `whisper_audio_start` `{id, sampleRate}` → binary frames → `whisper_audio_end` `{id}`: the spoken whisper, PCM16 mono at `sampleRate` (24 kHz). The ear gets a short cue of the line (3 to 7 words, no "Say"), not the full `text` on the screen |
 | text | `risk` `{score}`: 0..1, how close you are to getting caught |
 | text | `task_started` `{id, kind, label}`: e.g. finding a photo |
 | text | `task_done` `{id, kind, ok, imageUrl?, caption?}`: `imageUrl` normally points at this gateway (`/media/<id>`), which downloads the photo so the phone never hits a host that blocks it. If the gateway couldn't fetch it, it's the original address |

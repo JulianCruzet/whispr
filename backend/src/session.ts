@@ -226,7 +226,8 @@ export class PhoneSession {
           text: event.text,
           reason: event.reason === "task_done" ? "photo_ready" : "reply",
         });
-        this.speech = this.speech.then(() => this.say(event.id, event.text));
+        // The ear gets the short cue; the full line is on the screen.
+        this.speech = this.speech.then(() => this.say(event.id, event.spoken || event.text));
         return;
       case "task_started":
         this.send({

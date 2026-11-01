@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+import time
 
 import anthropic
 import httpx
@@ -15,8 +16,8 @@ from app.events import TranscriptIn
 from app.main import create_app
 from app.personas import PERSONAS
 from app.prompts import PHOTO_COMING_NOTE, photo_query_system, whisper_system
-from app.session import PHOTO_READY_WHISPER, Deps, Session
-from app.whisper import cap_words, clean_line, write_whisper
+from app.session import PHOTO_READY_SPOKEN, PHOTO_READY_WHISPER, Deps, Session
+from app.whisper import MAX_SPOKEN_WORDS, cap_words, clean_cue, clean_line, write_whisper
 
 IMAGE_URL = "https://img.example/laufey.jpg"
 
@@ -47,6 +48,8 @@ class Backend:
         self.photo_rank: dict[str, float] | None = None
         # What Haiku says when it looks at an image, by image URL ("yes" if missing).
         self.looks: dict[str, str] = {}
+        # Seconds each answer takes: by host for HTTP calls, by image URL for Haiku's looks.
+        self.delays: dict[str, float] = {}
         self.claude_requests = []
         self.jev_requests = []
 
@@ -69,7 +72,8 @@ class Backend:
             ),
         )
 
-    def _http(self, request: httpx.Request) -> httpx.Response:
+    async def _http(self, request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(self.delays.get(request.url.host, 0))
         if request.url.host == "api.typesafe.ai":
             body = json.loads(request.content)
             self.jev_requests.append(body)
@@ -89,11 +93,12 @@ class Backend:
         body = self.images.get(str(request.url), b"jpg")
         return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=body)
 
-    def _claude(self, request: httpx2.Request) -> httpx2.Response:
+    async def _claude(self, request: httpx2.Request) -> httpx2.Response:
         body = json.loads(request.content)
         self.claude_requests.append(body)
         content = body["messages"][0]["content"]
         if isinstance(content, list) and content[0]["type"] == "image":
+            await asyncio.sleep(self.delays.get(content[0]["source"]["url"], 0))
             answer = self.looks.get(content[0]["source"]["url"], "yes")
             return httpx2.Response(
                 200,
@@ -158,6 +163,44 @@ def test_their_question_gets_a_whisper():
     assert events[0]["cover_blown_risk"] == pytest.approx(0.5)
     assert events[1]["text"] == "Say the Toronto show."
     assert events[1]["reason"] == "reply"
+    # A one-line reply: the ear gets the whole line.
+    assert events[1]["spoken"] == "Say the Toronto show."
+
+
+def test_the_ear_gets_a_short_cue_and_the_screen_the_full_line():
+    backend = Backend(
+        whisper_text="Say the Toronto crowd was lit and God's Plan was the high point.\n"
+        "Crowd was lit, God's Plan."
+    )
+    events = run_line(backend, line())
+
+    assert events[1]["text"] == "Say the Toronto crowd was lit and God's Plan was the high point."
+    assert events[1]["spoken"] == "Crowd was lit, God's Plan."
+    system = backend.claude_requests[0]["system"]
+    assert "For their ear" in system and "3 to 6 words" in system
+
+
+@pytest.mark.parametrize(
+    "raw, cue",
+    [
+        ("Crowd was lit, God's Plan", "Crowd was lit, God's Plan"),
+        ("2. Ear: Say that the crowd was lit", "The crowd was lit"),
+        ('"Massey Hall, 2023"', "Massey Hall, 2023"),
+        ("2.5 boxer, never blew", "2.5 boxer, never blew"),
+    ],
+)
+def test_clean_cue_strips_labels_quotes_and_say(raw, cue):
+    assert clean_cue(raw) == cue
+
+
+def test_a_long_cue_is_cut_on_the_last_clause_that_fits():
+    backend = Backend(
+        whisper_text="Say the Toronto show.\nCrowd was lit, God's Plan closed it, then Hotline Bling encore"
+    )
+    events = run_line(backend, line())
+
+    assert events[1]["spoken"] == "Crowd was lit, God's Plan closed it"
+    assert len(events[1]["spoken"].split()) <= MAX_SPOKEN_WORDS
 
 
 def test_whisper_request_matches_the_spec():
@@ -314,6 +357,7 @@ def test_photo_task_returns_the_image_url_and_whispers_when_ready():
     assert done["image_url"] == IMAGE_URL
     assert done["used_fallback"] is False
     assert events[-1]["text"] == PHOTO_READY_WHISPER
+    assert events[-1]["spoken"] == PHOTO_READY_SPOKEN
     assert events[-1]["reason"] == "task_done"
 
 
@@ -711,6 +755,43 @@ def test_jev_ranks_a_real_concert_photo_above_a_press_photo():
     done = ranked_search([PRESS, CONCERT], rank={"r0": 0.1, "r1": 0.9})
 
     assert done["image_url"] == CONCERT["properties"]["url"]
+
+
+def timed_search(backend: Backend, use_claude: bool) -> tuple[photo_module.Photo | None, float]:
+    async def go():
+        claude = backend.deps.claude if use_claude else None
+        return await photo_module._search(backend.deps.http, backend.deps.settings, "Drake concert crowd", claude)
+
+    start = time.perf_counter()
+    photo = asyncio.run(go())
+    return photo, time.perf_counter() - start
+
+
+def test_jev_ranks_while_the_photo_sizes_are_checked():
+    backend = Backend()
+    backend.search_results = [PRESS, CONCERT]
+    backend.images = {r["properties"]["url"]: image_bytes(1080, 1920) for r in [PRESS, CONCERT]}
+    backend.photo_rank = {"r0": 0.1, "r1": 0.9}
+    # Jev and the image host each take 0.3 s: one after the other would be 0.6 s.
+    backend.delays = {"api.typesafe.ai": 0.3, "img.example": 0.3}
+
+    photo, seconds = timed_search(backend, use_claude=False)
+
+    assert photo.image_url == CONCERT["properties"]["url"]
+    assert seconds < 0.5
+
+
+def test_the_best_photo_goes_out_without_waiting_on_slower_looks():
+    backend = Backend()
+    backend.search_results = [CONCERT, PRESS]
+    backend.images = {r["properties"]["url"]: image_bytes(1080, 1920) for r in [PRESS, CONCERT]}
+    backend.photo_rank = {"r0": 0.9, "r1": 0.1}
+    backend.delays = {PRESS["thumbnail"]["src"]: 2.0}
+
+    photo, seconds = timed_search(backend, use_claude=True)
+
+    assert photo.image_url == CONCERT["properties"]["url"]
+    assert seconds < 1.0
 
 
 def test_jev_sees_titles_and_sources_not_just_urls():
