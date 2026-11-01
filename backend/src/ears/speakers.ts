@@ -23,8 +23,26 @@ const SHORT_CLIP_MARGIN = 0.22;
 const ADAPT_RATE = 0.15;
 const ADAPT_MIN_SECONDS = 1.2;
 const ADAPT_MIN_DISTANCE = 0.3;
-/** Without a sample of the other voice, fall back to loudness: this much quieter than the wearer is "them". */
+/** A line with no voiceprint falls back to loudness: this much quieter than the wearer is "them". */
 const LOUDNESS_MARGIN_DB = 8;
+/**
+ * How far a line is from one voice's sample (see `distance`). Measured on recorded voices
+ * at equal loudness: a voice against its own sample scores 0.20-0.45, a different voice
+ * 0.49 and up (median 1.26). The synthetic test voices wobble more: against a 4 s sample,
+ * the wearer's own lines reach 0.86 and a similar voice starts at 0.68.
+ */
+/** At or under this, it's that voice. */
+const SAME_VOICE = 0.45;
+/**
+ * At or over this, it's someone else. Set high because calling the wearer "them" whispers
+ * a reply to their own line; between this and SAME_VOICE is "unknown", so Jev decides.
+ */
+const OTHER_VOICE = 1.0;
+/** Under this, a line might still be that voice. */
+const MAYBE_SAME_VOICE = 0.85;
+/** Clips under SHORT_CLIP_SECONDS wobble more (the wearer's reach 1.11), so need clearer scores. */
+const SHORT_CLIP_SAME_VOICE = 0.35;
+const SHORT_CLIP_OTHER_VOICE = 1.4;
 /** A calibration sample needs at least this much speech to be useful as a voiceprint. */
 const MIN_SAMPLE_SECONDS = 0.8;
 
@@ -63,6 +81,19 @@ export class SpeakerModel {
       }
     }
 
+    // Only the wearer's sample: does this sound like them?
+    if (me && !them && print) {
+      const d = distance(print, me);
+      const short = print.seconds < SHORT_CLIP_SECONDS;
+      const speaker: Speaker =
+        d <= (short ? SHORT_CLIP_SAME_VOICE : SAME_VOICE)
+          ? "me"
+          : d >= (short ? SHORT_CLIP_OTHER_VOICE : OTHER_VOICE)
+            ? "them"
+            : "unknown";
+      return { speaker, position: null, how: "voice" };
+    }
+
     const level = levelDb ?? print?.mean[LEVEL] ?? null;
     if (this.myLevelDb !== null && level !== null) {
       return {
@@ -72,6 +103,18 @@ export class SpeakerModel {
       };
     }
     return { speaker: "unknown", position: null, how: "none" };
+  }
+
+  /** True if `print` sounds like `who`'s sample (false if there's no sample of `who`). */
+  soundsLike(who: Who, print: Voiceprint): boolean {
+    const sample = this.samples[who];
+    return sample !== null && distance(print, sample) <= SAME_VOICE;
+  }
+
+  /** True unless `print` is clearly someone other than `who` (false if there's no sample of `who`). */
+  couldBe(who: Who, print: Voiceprint): boolean {
+    const sample = this.samples[who];
+    return sample !== null && distance(print, sample) < MAYBE_SAME_VOICE;
   }
 
   /**
@@ -166,3 +209,23 @@ export function splitBySpeaker(
   if (runs.length < 2 || !confident) return null;
   return runs.map((run) => ({ text: run.words.map((w) => w.text).join(" "), speaker: run.speaker as Who }));
 }
+
+/**
+ * How far a voiceprint is from a sample, in units of the sample's own frame-to-frame
+ * wobble (root mean square over the timbre and pitch features; loudness is left out
+ * because people move and change volume).
+ */
+export function distance(print: Voiceprint, sample: Voiceprint): number {
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < LEVEL; i++) {
+    const a = sample.mean[i];
+    const x = print.mean[i];
+    const wobble = sample.variance[i];
+    if (!Number.isFinite(a) || !Number.isFinite(x) || !Number.isFinite(wobble)) continue;
+    sum += (x - a) ** 2 / (wobble + 1e-6);
+    count++;
+  }
+  return count ? Math.sqrt(sum / count) : Infinity;
+}
+
