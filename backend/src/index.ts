@@ -1,34 +1,17 @@
+// Audio gateway: the phone's WebSocket, speech-to-text and text-to-speech.
+// Decisions (whisper or not, what to say, photo tasks) come from the brain in backend/app.
+
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
-import { Brain } from "./brain/index.js";
 import { config, logIntegrations } from "./config.js";
-import type { ServerEvent, Speaker } from "./protocol.js";
-import { broadcast, dashboards, PhoneSession } from "./session.js";
+import { dashboards, PhoneSession } from "./session.js";
 
-const server = createServer(async (req, res) => {
+const server = createServer((req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
 
   if (req.method === "GET" && url.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true }));
-    return;
-  }
-
-  // Run the brain on a typed line, no audio needed:
-  //   curl -X POST localhost:8787/debug/turn -d '{"text":"wait you saw her live?","speaker":"them"}'
-  if (req.method === "POST" && url.pathname === "/debug/turn") {
-    const body = JSON.parse((await readBody(req)) || "{}") as { text?: string; speaker?: Speaker };
-    const events: ServerEvent[] = [];
-    const brain = new Brain({
-      send: (e) => {
-        events.push(e);
-        broadcast(e);
-      },
-      say: async () => {},
-    });
-    await brain.onTurn(body.text ?? "", body.speaker ?? "them");
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(events, null, 2));
+    res.end(JSON.stringify({ ok: true, elevenlabs: !!config.elevenlabs.apiKey, brain: config.brain.url }));
     return;
   }
 
@@ -53,15 +36,6 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 server.listen(config.port, () => {
-  console.log(`whispr backend on :${config.port}  (phone: /ws, dashboard: /ws/dashboard)`);
+  console.log(`whispr gateway on :${config.port}  (phone: /ws, dashboard: /ws/dashboard)`);
   logIntegrations();
 });
-
-function readBody(req: import("node:http").IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => resolve(data));
-    req.on("error", reject);
-  });
-}

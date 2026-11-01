@@ -1,6 +1,26 @@
+# Two services: the brain (Python) and the audio gateway (Node) the phone connects to.
 services:
   - type: web
-    name: whispr-backend
+    name: whispr-brain
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: JEV_API_KEY
+        sync: false
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
+      - key: FALLBACK_PHOTO_URL
+        sync: false
+      - key: APP_SHARED_TOKEN
+        sync: false
+
+  - type: web
+    name: whispr-gateway
     runtime: node
     rootDir: backend
     buildCommand: npm ci && npm run build
@@ -11,17 +31,11 @@ services:
         sync: false
       - key: ELEVENLABS_VOICE_ID
         sync: false
-      - key: JEV_API_KEY
+      - key: APP_SHARED_TOKEN
         sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: SERPAPI_KEY
-        sync: false
-      - key: AGENTBOXD_API_KEY
-        sync: false
-      - key: AGENTBOXD_INBOX
-        sync: false
-      - key: PHOTO_EMAIL_TO
-        sync: false
-      - key: FALLBACK_PHOTO_URL
-        sync: false
+      # The gateway reaches the brain over Render's private network.
+      - key: BRAIN_HOSTPORT
+        fromService:
+          type: web
+          name: whispr-brain
+          property: hostport

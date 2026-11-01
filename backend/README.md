@@ -2,7 +2,7 @@
 
 Takes transcript lines from the app and decides whether to coach the wearer. Jev makes the decisions, Claude Haiku 5.5 writes the whisper line, and a background task finds the proof photo.
 
-The app owns Scribe, TTS and showing the photo. This service only sends text and image URLs.
+The audio gateway (`src/`, Node) owns Scribe, TTS and the phone connection: it sends this service one message per finished line and speaks the whispers it gets back. This service only sends text and image URLs. Run both with `./scripts/dev.sh`.
 
 ## Run it
 
@@ -11,7 +11,7 @@ From `backend/`:
 ```powershell
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-dev.txt
-copy ..\.env.example ..\.env   # then fill in the keys
+copy .env.example .env   # then fill in the keys
 .venv\Scripts\python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
