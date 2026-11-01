@@ -194,7 +194,7 @@ describe("bridge to the brain", () => {
     phone.say({ type: "debug_turn", text: "which show?", speaker: "them" });
     await until(() => phone.events("whisper_audio_end").length === 1 && phone.events("task_done").length === 1);
 
-    assert.deepEqual(phone.events("whisper")[0], { type: "whisper", id: "w1", text: "Say the Toronto show." });
+    assert.deepEqual(phone.events("whisper")[0], { type: "whisper", id: "w1", text: "Say the Toronto show.", reason: "reply" });
     assert.equal(phone.events("task_started")[0].id, "t1");
     assert.deepEqual(phone.events("task_done")[0], {
       type: "task_done",
@@ -287,6 +287,30 @@ describe("calibrating the other person", () => {
     assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", who: "them", ok: false });
     assert.equal(phone.events("transcript")[0].speaker, "them");
     assert.equal(brain.received[0].speaker, "them");
+  });
+});
+
+describe("photo-ready alert", () => {
+  test("is tagged photo_ready so the app keeps the line on screen, and is still spoken", async () => {
+    brain.reply = () => [
+      { type: "whisper", id: "line", text: "Say hold on, let me find it.", reason: "reply", cover_blown_risk: null },
+      { type: "whisper", id: "ready", text: "The photo's in your camera roll. Show them now.", reason: "task_done", cover_blown_risk: null },
+    ];
+    const { phone } = newSession();
+    phone.say({ type: "debug_turn", text: "prove it", speaker: "them" });
+    await until(() => phone.events("whisper_audio_end").length === 2);
+
+    assert.deepEqual(
+      phone.events("whisper").map((e) => [e.id, e.reason]),
+      [
+        ["line", "reply"],
+        ["ready", "photo_ready"],
+      ],
+    );
+    assert.deepEqual(
+      phone.events("whisper_audio_end").map((e) => e.id),
+      ["line", "ready"],
+    );
   });
 });
 
