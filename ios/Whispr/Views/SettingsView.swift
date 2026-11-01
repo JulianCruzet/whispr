@@ -33,9 +33,9 @@ struct SettingsView: View {
                             ForEach(PhoneOutput.allCases) { Text($0.label).tag($0) }
                         }
                     } header: {
-                        Text("Without headphones")
+                        Text("Speaker output")
                     } footer: {
-                        Text("Headphones always come first. On the iPhone speaker, the other person hears Whispr too, and the mic pauses while it talks.")
+                        Text("Used when no headphones are connected. On the iPhone speaker, the other person hears Whispr too, and the mic pauses while it talks.")
                     }
                     Section {
                         TextField("Caller name", text: $model.panicCallerName)
