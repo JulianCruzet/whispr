@@ -57,7 +57,7 @@ Whispr is a lighthearted improv game for iPhone and headphones. It listens to yo
 | **Live transcript** | ElevenLabs Scribe transcribes as people talk, and finished lines are labelled YOU or THEM |
 | **Fast on questions** | A line ending in a question goes out after 300 ms instead of waiting for about 0.6 s of silence |
 | **Knows who's talking** | You each say one sentence to calibrate, then a voiceprint of every line tells your voice from theirs, even at equal volume. If it isn't sure, Jev decides from the words |
-| **Whispers in your ear** | ElevenLabs Flash speaks each line through your headphones, one at a time and never over each other. With no headphones connected, choose the iPhone's top speaker or its main speaker, where the mic pauses while it talks |
+| **Whispers in your ear** | ElevenLabs Flash speaks each line through your headphones, one at a time and never over each other. With no headphones connected, **Speaker output** in Settings picks the iPhone's top speaker or its main speaker, where the mic pauses while it talks |
 | **Your choice of mic** | Listen with your headphones, or switch to the iPhone mic if they can't hear the other person |
 
 ### 🧠 Brain
@@ -95,9 +95,9 @@ Choose who you're playing under **Settings → Persona**. Every persona follows 
 
 | Feature | Description |
 |---|---|
-| **Fake incoming call** | Tap **Panic** and your phone rings out loud with a call from whoever you choose |
+| **Fake incoming call** | Tap **Panic** and your phone rings out loud with the iPhone's default ringtone, or a built-in tone if iOS blocks it, with a call from whoever you choose |
 | **Time to pocket it** | Ring right away, or after 5 or 10 seconds |
-| **Two call screens** | Whispr's own full-screen call, or the real iOS call screen |
+| **Two call screens** | Whispr's own full-screen call in the current iOS style, with slide to answer, or the real iOS call screen |
 | **Picks back up** | Listening pauses during the call and resumes when it ends |
 
 ### 🔐 Sign-in
@@ -206,7 +206,7 @@ brew install xcodegen
 cd ios && xcodegen && open Whispr.xcodeproj
 ```
 
-Re-run `xcodegen` after adding or removing Swift files. In Xcode, pick your team under Signing & Capabilities, plug in your iPhone and hit Run. In the app's settings, set the backend URL to `ws://<laptop-ip>:8787/ws` (same Wi-Fi), or the Render URL (`wss://.../ws`).
+Re-run `xcodegen` after adding or removing Swift files. In Xcode, pick your team under Signing & Capabilities, plug in your iPhone and hit Run. In the app's settings, set the backend URL to `ws://<laptop-ip>:8787/ws` (same Wi-Fi), or the Render gateway (`wss://whispr-cjhv.onrender.com/ws`). Deploy steps are in [backend/README.md](backend/README.md#deploy-on-render).
 
 Sign-in uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in `ios/project.yml`. Clear both to skip sign-in, for example on a demo phone. Never put a Supabase secret key there, because anything in the app can be read out of it.
 
