@@ -32,7 +32,7 @@ targets:
         WhisprBackendURL: $(WHISPR_BACKEND_URL)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, voip]
         NSMicrophoneUsageDescription: Whispr listens to your conversation so it can whisper what to say next.
         NSPhotoLibraryAddUsageDescription: Whispr saves proof photos to your library.
         NSLocalNetworkUsageDescription: Whispr connects to the backend running on your laptop.
