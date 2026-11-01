@@ -185,7 +185,11 @@ class Session:
                 log.warning("Photo query call failed, using the default: %r", exc)
 
             photo = await find_photo(
-                self.deps.http, settings, query, use_cached=persona.uses_cached_photo
+                self.deps.http,
+                settings,
+                query,
+                use_cached=persona.uses_cached_photo,
+                claude=self.deps.claude,
             )
             if photo:
                 done |= {

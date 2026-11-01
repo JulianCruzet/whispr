@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     launch_task_threshold: float = 0.6
     whisper_cooldown_s: float = 5.0
     photo_cooldown_s: float = 30.0
-    photo_deadline_s: float = 5.0
+    # Search, Jev's ranking and Haiku's look at the top photos all fit in this.
+    photo_deadline_s: float = 8.0
 
     @property
     def base_url(self) -> str:

@@ -2,10 +2,12 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+import anthropic
 import httpx
 from PIL import ImageFile
 
 from app.config import ASSETS_DIR, FALLBACK_PHOTO, Settings
+from app.jev import JEV_URL
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +23,11 @@ MAX_PROBE_BYTES = 512 * 1024
 PORTRAIT_RATIO = 1.15
 # Smaller than this on the short side looks like a thumbnail, not a phone photo.
 MIN_SHORT_SIDE = 400
+# Jev reads only text, so it ranks results by their title and source page; then Haiku,
+# which can see, looks at the top few. A photo it rejects is never sent.
+JEV_RANK_TIMEOUT_S = 2.0
+LOOK_COUNT = 3
+
 # Many image hosts refuse non-browser clients (e.g. Wikimedia answers python-httpx with 403),
 # so fetch images the way the phone's browser would.
 IMAGE_HEADERS = {
@@ -81,7 +88,94 @@ async def _probe(http: httpx.AsyncClient, url: str) -> tuple[int, int] | None:
         return UNKNOWN_SIZE
 
 
-async def _search(http: httpx.AsyncClient, settings: Settings, query: str) -> Photo | None:
+async def _rank_by_jev(
+    http: httpx.AsyncClient, settings: Settings, query: str, results: list[dict]
+) -> list[dict]:
+    """Results reordered by how likely each is a real photo of this event, judged by Jev
+    from its title and source page. Falls back to Brave's order if Jev can't answer."""
+    if not settings.jev_api_key or len(results) < 2:
+        return results
+    criteria = {
+        f"r{i}": f"{result.get('title') or 'untitled'} (from {result.get('source') or result.get('url') or 'unknown site'})"[:200]
+        for i, result in enumerate(results)
+    }
+    body = {
+        "model": settings.jev_model,
+        "state": f"Image search for: {query}",
+        "questions": {
+            "best_photo": {
+                "type": "choice",
+                "instructions": (
+                    "Which result is most likely a real photo of exactly this event, taken by "
+                    "someone in the audience? Not a press photo, red carpet, poster, meme, "
+                    "album art or a different event."
+                ),
+                "criteria": criteria,
+            }
+        },
+    }
+    try:
+        response = await http.post(
+            JEV_URL,
+            headers={"Authorization": f"Bearer {settings.jev_api_key}"},
+            json=body,
+            timeout=JEV_RANK_TIMEOUT_S,
+        )
+        response.raise_for_status()
+        probabilities = response.json()["answers"]["best_photo"]["probabilities"]
+        scores = [float(probabilities.get(f"r{i}", 0)) for i in range(len(results))]
+    except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+        log.info("Jev couldn't rank the photos, keeping search order: %r", exc)
+        return results
+    order = sorted(range(len(results)), key=lambda i: -scores[i])  # stable: ties keep search order
+    return [results[i] for i in order]
+
+
+async def _looks_right(
+    claude: anthropic.AsyncAnthropic, settings: Settings, query: str, image_url: str
+) -> bool | None:
+    """Haiku looks at the image: True if it shows the event, False if clearly not,
+    None if it couldn't tell (then the photo is still allowed)."""
+    try:
+        response = await claude.messages.create(
+            model=settings.whisper_model,
+            max_tokens=5,
+            thinking={"type": "disabled"},
+            output_config={"effort": "low"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "source": {"type": "url", "url": image_url}},
+                        {
+                            "type": "text",
+                            "text": (
+                                f"Is this a real photo of {query}: the actual event, seen by "
+                                "someone there (not a press photo, poster, meme or a different "
+                                "event)? Answer only yes or no."
+                            ),
+                        },
+                    ],
+                }
+            ],
+        )
+    except anthropic.APIError as exc:
+        log.info("Couldn't check the photo, allowing it: %r", exc)
+        return None
+    answer = "".join(block.text for block in response.content if block.type == "text").strip().lower()
+    if answer.startswith("yes"):
+        return True
+    if answer.startswith("no"):
+        return False
+    return None
+
+
+async def _search(
+    http: httpx.AsyncClient,
+    settings: Settings,
+    query: str,
+    claude: anthropic.AsyncAnthropic | None = None,
+) -> Photo | None:
     response = await http.get(
         BRAVE_IMAGES_URL,
         headers={"X-Subscription-Token": settings.brave_search_api_key},
@@ -93,23 +187,33 @@ async def _search(http: httpx.AsyncClient, settings: Settings, query: str) -> Ph
         for result in response.json().get("results", [])
         if result.get("properties", {}).get("url", "").startswith("https://")
     ][:PROBE_COUNT]
+    results = await _rank_by_jev(http, settings, query, results)
 
     probes = await asyncio.gather(*(_probe(http, r["properties"]["url"]) for r in results))
-    candidates = []
+    candidates: list[tuple[Photo, str]] = []
     for result, probe in zip(results, probes):
         if probe is None:
             continue
         width, height = probe if probe != UNKNOWN_SIZE else (None, None)
-        candidates.append(
-            Photo(image_url=result["properties"]["url"], title=result.get("title"), width=width, height=height)
-        )
+        photo = Photo(image_url=result["properties"]["url"], title=result.get("title"), width=width, height=height)
+        # Brave's own small copy always loads, so Haiku looks at that one.
+        candidates.append((photo, result.get("thumbnail", {}).get("src") or photo.image_url))
 
-    # Results come back ranked: take the best vertical one that's big enough to pass
-    # for a phone photo, else the best that loads (the app crops it to portrait).
-    big_enough = [photo for photo in candidates if not photo.too_small]
-    return next((photo for photo in big_enough if photo.is_portrait), None) or next(
-        iter(big_enough or candidates), None
-    )
+    # Best first: vertical ones big enough to pass for a phone photo, then other big ones,
+    # then the rest (the app crops anything wide to portrait). Within each, Jev's order.
+    big_enough = [c for c in candidates if not c[0].too_small]
+    preferred = [c for c in big_enough if c[0].is_portrait] + [c for c in big_enough if not c[0].is_portrait]
+    preferred += [c for c in candidates if c not in big_enough]
+    if claude is None or not preferred:
+        return preferred[0][0] if preferred else None
+
+    looked = preferred[:LOOK_COUNT]
+    verdicts = await asyncio.gather(*(_looks_right(claude, settings, query, thumb) for _, thumb in looked))
+    for (photo, _), verdict in zip(looked, verdicts):
+        if verdict is not False:
+            return photo
+    log.info("Haiku rejected the top %d photos for %r", len(looked), query)
+    return None
 
 
 def fallback_photo(settings: Settings) -> Photo | None:
@@ -124,13 +228,17 @@ def fallback_photo(settings: Settings) -> Photo | None:
 
 
 async def find_photo(
-    http: httpx.AsyncClient, settings: Settings, query: str, use_cached: bool = True
+    http: httpx.AsyncClient,
+    settings: Settings,
+    query: str,
+    use_cached: bool = True,
+    claude: anthropic.AsyncAnthropic | None = None,
 ) -> Photo | None:
     photo = None
     if settings.brave_search_api_key:
         try:
             async with asyncio.timeout(settings.photo_deadline_s):
-                photo = await _search(http, settings, query)
+                photo = await _search(http, settings, query, claude)
         except (TimeoutError, httpx.HTTPError, ValueError) as exc:
             log.warning("Photo search failed: %r", exc)
     else:

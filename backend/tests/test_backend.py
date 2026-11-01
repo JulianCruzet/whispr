@@ -43,6 +43,10 @@ class Backend:
         self.search_results = [{"title": "Laufey live", "properties": {"url": IMAGE_URL}}]
         # Image bodies by URL; anything else gets a tiny unsized "image".
         self.images: dict[str, bytes] = {}
+        # Jev's pick for "best_photo" as option -> probability, or None to fail that call.
+        self.photo_rank: dict[str, float] | None = None
+        # What Haiku says when it looks at an image, by image URL ("yes" if missing).
+        self.looks: dict[str, str] = {}
         self.claude_requests = []
         self.jev_requests = []
 
@@ -67,7 +71,16 @@ class Backend:
 
     def _http(self, request: httpx.Request) -> httpx.Response:
         if request.url.host == "api.typesafe.ai":
-            self.jev_requests.append(json.loads(request.content))
+            body = json.loads(request.content)
+            self.jev_requests.append(body)
+            if "best_photo" in body["questions"]:
+                if self.photo_rank is None:
+                    return httpx.Response(500)
+                best = max(self.photo_rank, key=self.photo_rank.get)
+                return httpx.Response(
+                    200,
+                    json={"answers": {"best_photo": {"type": "choice", "choice": best, "probabilities": self.photo_rank}}},
+                )
             return httpx.Response(200, json=self.jev)
         if request.url.host == "api.search.brave.com":
             if self.fail_search:
@@ -77,7 +90,24 @@ class Backend:
         return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=body)
 
     def _claude(self, request: httpx2.Request) -> httpx2.Response:
-        self.claude_requests.append(json.loads(request.content))
+        body = json.loads(request.content)
+        self.claude_requests.append(body)
+        content = body["messages"][0]["content"]
+        if isinstance(content, list) and content[0]["type"] == "image":
+            answer = self.looks.get(content[0]["source"]["url"], "yes")
+            return httpx2.Response(
+                200,
+                json={
+                    "id": "msg_look",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": "claude-haiku-5-5",
+                    "content": [{"type": "text", "text": answer}],
+                    "stop_reason": "end_turn",
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 10, "output_tokens": 1},
+                },
+            )
         return httpx2.Response(
             200,
             json={
@@ -172,9 +202,12 @@ def test_wearers_claim_gets_a_photo_but_no_reply_whisper():
 
     assert types(events) == ["transcript", "task_started", "task_done", "whisper"]
     assert events[-1]["reason"] == "task_done"
-    # The only Haiku call wrote the search query; nothing was written back at the wearer.
-    assert len(backend.claude_requests) == 1
+    # Haiku wrote the search query and looked at the photo; nothing was written back at the wearer.
     assert "image search query" in backend.claude_requests[0]["system"]
+    assert all(
+        "image search query" in r.get("system", "") or r["messages"][0]["content"][0]["type"] == "image"
+        for r in backend.claude_requests
+    )
 
 
 def test_explicit_speaker_overrides_jev():
@@ -648,3 +681,78 @@ def test_word_cap_doesnt_cut_a_number_at_its_decimal_point():
 )
 def test_clean_line_drops_the_colon_after_say(raw, cleaned):
     assert clean_line(raw) == cleaned
+
+
+def ranked_search(results: list[dict], rank: dict[str, float] | None, looks: dict[str, str] | None = None) -> dict:
+    """A photo task where search returns these vertical, phone-sized results in this order."""
+    backend = Backend()
+    backend.search_results = results
+    backend.images = {r["properties"]["url"]: image_bytes(1080, 1920) for r in results}
+    backend.photo_rank = rank
+    backend.looks = looks or {}
+    return done_event(backend)
+
+
+PRESS = {
+    "title": "Drake speaks at a press conference",
+    "source": "gettyimages.com",
+    "properties": {"url": "https://img.example/press.jpg"},
+    "thumbnail": {"src": "https://thumb.example/press.jpg"},
+}
+CONCERT = {
+    "title": "Drake performs at Scotiabank Arena, It's All A Blur tour",
+    "source": "instagram.com",
+    "properties": {"url": "https://img.example/concert.jpg"},
+    "thumbnail": {"src": "https://thumb.example/concert.jpg"},
+}
+
+
+def test_jev_ranks_a_real_concert_photo_above_a_press_photo():
+    done = ranked_search([PRESS, CONCERT], rank={"r0": 0.1, "r1": 0.9})
+
+    assert done["image_url"] == CONCERT["properties"]["url"]
+
+
+def test_jev_sees_titles_and_sources_not_just_urls():
+    backend = Backend()
+    backend.search_results = [PRESS, CONCERT]
+    backend.photo_rank = {"r0": 0.5, "r1": 0.5}
+    done_event(backend)
+
+    ask = next(r for r in backend.jev_requests if "best_photo" in r["questions"])
+    criteria = ask["questions"]["best_photo"]["criteria"]
+    assert criteria["r0"] == "Drake speaks at a press conference (from gettyimages.com)"
+    assert "Scotiabank Arena" in criteria["r1"]
+
+
+def test_haiku_looking_at_the_photo_can_reject_jevs_pick():
+    done = ranked_search(
+        [PRESS, CONCERT],
+        rank={"r0": 0.1, "r1": 0.9},
+        looks={"https://thumb.example/concert.jpg": "no"},
+    )
+
+    assert done["image_url"] == PRESS["properties"]["url"]
+
+
+def test_nothing_is_sent_when_haiku_rejects_every_photo(tmp_path, monkeypatch):
+    monkeypatch.setattr(photo_module, "ASSETS_DIR", tmp_path)  # no cached photo either
+    done = ranked_search(
+        [PRESS, CONCERT],
+        rank={"r0": 0.5, "r1": 0.5},
+        looks={"https://thumb.example/concert.jpg": "No.", "https://thumb.example/press.jpg": "no"},
+    )
+
+    assert done["ok"] is False
+
+
+def test_when_jev_cant_rank_the_search_order_stands():
+    done = ranked_search([PRESS, CONCERT], rank=None)
+
+    assert done["image_url"] == PRESS["properties"]["url"]
+
+
+def test_an_unclear_look_still_allows_the_photo():
+    done = ranked_search([CONCERT], rank=None, looks={"https://thumb.example/concert.jpg": "It's hard to say"})
+
+    assert done["image_url"] == CONCERT["properties"]["url"]
