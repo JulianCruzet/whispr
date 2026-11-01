@@ -17,7 +17,7 @@ from app.main import create_app
 from app.personas import PERSONAS
 from app.prompts import PHOTO_COMING_NOTE, photo_query_system, whisper_system
 from app.session import PHOTO_READY_SPOKEN, PHOTO_READY_WHISPER, Deps, Session
-from app.whisper import MAX_SPOKEN_WORDS, cap_words, clean_cue, clean_line, write_whisper
+from app.whisper import MAX_SPOKEN_WORDS, cap_words, clean_cue, clean_line, write_whisper, drop_trailing_instruction
 
 IMAGE_URL = "https://img.example/laufey.jpg"
 
@@ -559,6 +559,14 @@ def test_every_persona_stays_specific_to_the_conversation(persona_id):
     assert "Be specific to this conversation" in whisper_system(PERSONAS[persona_id])
 
 
+@pytest.mark.parametrize("persona_id", PERSONAS)
+def test_every_persona_redirects_instead_of_sounding_unsure(persona_id):
+    prompt = whisper_system(PERSONAS[persona_id])
+
+    assert "Never sound unsure" in prompt
+    assert "The redirect must stay on that topic" in prompt
+
+
 def test_cached_photo_has_no_hardcoded_caption(cached_photo):
     backend = Backend()
     backend.fail_search = True
@@ -872,3 +880,16 @@ def test_an_unclear_look_still_allows_the_photo():
     done = ranked_search([CONCERT], rank=None, looks={"https://thumb.example/concert.jpg": "It's hard to say"})
 
     assert done["image_url"] == CONCERT["properties"]["url"]
+
+
+@pytest.mark.parametrize(
+    "raw, cleaned",
+    [
+        ("Say you caught her at Massey Hall and name a song you remember", "Say you caught her at Massey Hall"),
+        ("Say you saw the show, then pick one from the set", "Say you saw the show"),
+        ("Say the Massey Hall show wrecked you", "Say the Massey Hall show wrecked you"),
+        ("Say the third song was From the Start and name-drop nobody", "Say the third song was From the Start and name-drop nobody"),
+    ],
+)
+def test_trailing_instructions_are_dropped_from_the_screen_line(raw, cleaned):
+    assert drop_trailing_instruction(raw) == cleaned
