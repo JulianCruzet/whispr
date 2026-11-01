@@ -28,10 +28,14 @@ struct SettingsView: View {
                             model.calibrateForDemo(.them)
                             dismiss()
                         }
+                        Button("Clear calibrated voices", role: .destructive) {
+                            model.clearCalibration()
+                        }
+                        .disabled(model.calibratedVoices.isEmpty)
                     } header: {
                         Text("Voices for the demo")
                     } footer: {
-                        Text("15 seconds of each of you talking normally, so Whispr knows exactly who is who. Do yours first; the main screen shows how far along it is.")
+                        Text("15 seconds of each of you talking normally, so Whispr knows exactly who is who. Do yours first; the main screen shows the bar filling as you talk. Clear them before new people calibrate.")
                     }
                     .disabled(model.connection != .connected)
                     Section {

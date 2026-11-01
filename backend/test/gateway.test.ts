@@ -349,7 +349,7 @@ function voiceSession(deviceId?: string) {
 }
 
 describe("calibration", () => {
-  test("listens across lines until it has ~4 s of the wearer's speech, reporting progress", async () => {
+  test("listens across lines until the wearer has talked ~6 s, reporting progress", async () => {
     brain.reply = () => [];
     const { phone, session } = voiceSession();
     phone.say({ type: "calibrate", who: "me" });
@@ -359,8 +359,8 @@ describe("calibration", () => {
 
     const progress = phone.events("calibrating");
     assert.equal(progress.length, 2);
-    assert.ok(progress[0].seconds < 4 && progress[1].seconds >= 4, `progress ${progress.map((p) => p.seconds)}`);
-    assert.equal(progress[1].target, 4);
+    assert.ok(progress[0].seconds < 6 && progress[1].seconds >= 6, `progress ${progress.map((p) => p.seconds)}`);
+    assert.equal(progress[1].target, 6);
     assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", who: "me", ok: true });
     assert.ok(phone.events("transcript").every((t) => t.speaker === "me"));
   });
@@ -369,10 +369,10 @@ describe("calibration", () => {
     brain.reply = () => [];
     const { phone, session } = voiceSession();
     phone.say({ type: "calibrate", who: "me" });
-    speakInto(session, "hey, I'm Alex", speak(ALEX, 5.6, 3));
+    speakInto(session, "hey, I'm Alex", speak(ALEX, 6.4, 3));
     phone.say({ type: "calibrate", who: "them" });
     speakInto(session, "go on, say something", speak(ALEX, 2, 4)); // the wearer, prompting
-    speakInto(session, "hi, I'm Kim, what's up", speak(KIM, 4.2, 5));
+    speakInto(session, "hi, I'm Kim, what's up", speak(KIM, 5.4, 5));
     assert.deepEqual(phone.events("calibrated").map((e) => [e.who, e.ok]), [
       ["me", true],
       ["them", true],
@@ -424,13 +424,40 @@ describe("calibration", () => {
     brain.reply = () => [];
     const { phone, session } = voiceSession();
     phone.say({ type: "calibrate", who: "me", seconds: 15 });
-    for (let i = 0; i < 4; i++) speakInto(session, `line ${i}`, speak(ALEX, 4.2, 60 + i));
-    assert.equal(phone.events("calibrated").length, 0, "~13 s isn't 15 s yet");
-    speakInto(session, "and one more", speak(ALEX, 4.2, 64));
+    for (let i = 0; i < 4; i++) speakInto(session, `line ${i}`, speak(ALEX, 3.2, 60 + i));
+    assert.equal(phone.events("calibrated").length, 0, "12.8 s isn't 15 s yet");
+    speakInto(session, "and one more", speak(ALEX, 3.2, 64));
     const progress = phone.events("calibrating");
     assert.equal(progress.at(-1).target, 15);
     assert.ok(progress.at(-1).seconds >= 15);
     assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", who: "me", ok: true });
+  });
+
+  test("the bar moves while they're still talking, before Scribe finishes the line", async () => {
+    const { phone, session } = voiceSession();
+    phone.say({ type: "calibrate", who: "me", seconds: 15 });
+    const scribe = (session as any).scribe;
+    scribe.emit("partial", "so last night");
+    await new Promise((r) => setTimeout(r, 600));
+    scribe.emit("partial", "so last night we went to");
+    const live = phone.events("calibrating");
+    assert.ok(live.length >= 2, "progress before any line is finished");
+    const latest = live.at(-1);
+    assert.ok(latest.seconds > 0.4 && latest.seconds < 1.2, `live ${latest.seconds}`);
+    assert.equal(latest.target, 15);
+  });
+
+  test("clearing forgets both voices, even for a phone that reconnects", async () => {
+    brain.reply = () => [];
+    const first = voiceSession("phone-clear");
+    first.phone.say({ type: "calibrate", who: "me" });
+    speakInto(first.session, "hey, I'm Alex", speak(ALEX, 6.4, 70));
+    assert.equal(first.phone.events("calibrated").at(-1).ok, true);
+    first.phone.say({ type: "clear_calibration" });
+    first.phone.emit("close");
+
+    const again = voiceSession("phone-clear");
+    assert.equal(again.phone.events("calibrated").length, 0);
   });
 
   test("gives up after 4 lines without enough speech", async () => {
@@ -444,10 +471,10 @@ describe("calibration", () => {
     brain.reply = () => [];
     const { phone, session } = voiceSession();
     phone.say({ type: "calibrate", who: "me" });
-    speakInto(session, "hey, I'm Alex", speak(ALEX, 5.6, 9));
+    speakInto(session, "hey, I'm Alex", speak(ALEX, 6.4, 9));
     phone.say({ type: "calibrate", who: "them" });
     // Nobody else speaks up: the wearer keeps talking past the two skipped lines.
-    for (let i = 0; i < 3; i++) speakInto(session, `come on, say something ${i}`, speak(ALEX, 4.2, 10 + i));
+    for (let i = 0; i < 3; i++) speakInto(session, `come on, say something ${i}`, speak(ALEX, 5.4, 10 + i));
     assert.deepEqual(phone.events("calibrated").at(-1), {
       type: "calibrated",
       who: "them",
@@ -460,7 +487,7 @@ describe("calibration", () => {
     brain.reply = () => [];
     const first = voiceSession("phone-1");
     first.phone.say({ type: "calibrate", who: "me" });
-    speakInto(first.session, "hey, I'm Alex", speak(ALEX, 5.6, 8));
+    speakInto(first.session, "hey, I'm Alex", speak(ALEX, 6.4, 8));
     first.phone.emit("close");
 
     const again = voiceSession("phone-1");

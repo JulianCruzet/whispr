@@ -357,6 +357,15 @@ final class AppModel {
         if who == .them { skippedThem = false }
     }
 
+    /// Forgets both voices, calibrated or learnt, so new people can calibrate from scratch.
+    func clearCalibration() {
+        client.send(json: ["type": "clear_calibration"])
+        calibratedVoices = []
+        calibration = .none
+        calibrationLength = .quick
+        skippedThem = false
+    }
+
     /// From Settings: 15 s of `who` talking, listening first if it isn't yet.
     func calibrateForDemo(_ who: Speaker) {
         Task {

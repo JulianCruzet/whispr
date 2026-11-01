@@ -17,6 +17,8 @@ export type ClientMessage =
   /** The next line spoken is `who` (default "me"): learn what their voice sounds like. */
   /** `seconds`: how much speech to collect (default ~4 s for me, ~3 s for them; up to 30). */
   | { type: "calibrate"; who?: "me" | "them"; seconds?: number }
+  /** Forget both voice samples (calibrated or learnt), e.g. before a demo with new people. */
+  | { type: "clear_calibration" }
   /** Who the wearer is playing: fan, interview, first_date or car_salesman. Default: fan. */
   | { type: "set_persona"; persona: string }
   | { type: "ping" };
@@ -43,7 +45,7 @@ export type ServerEvent =
       caption?: string;
       emailed?: boolean;
     }
-  /** Calibration progress: seconds of `who`'s speech collected so far, out of `target`. */
+  /** Calibration progress: seconds `who` has talked so far, out of `target`. Sent live while they talk. */
   | { type: "calibrating"; who: "me" | "them"; seconds: number; target: number }
   /** `reason` says why a sample was refused: too little speech, or "them" sounded like the wearer. */
   | { type: "calibrated"; who: "me" | "them"; ok: boolean; reason?: "too_short" | "sounds_like_you" }
