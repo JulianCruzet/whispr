@@ -113,6 +113,7 @@ class Backend:
                     "usage": {"input_tokens": 10, "output_tokens": 1},
                 },
             )
+        await asyncio.sleep(self.delays.get("claude", 0))
         return httpx2.Response(
             200,
             json={
@@ -311,6 +312,33 @@ def test_jevs_confidence_goes_back_with_the_verdict():
 
     assert events[0]["who_spoke"] == "me"
     assert events[0]["who_spoke_p"] == pytest.approx(0.92)
+
+
+def test_the_reply_is_written_while_jev_decides():
+    backend = Backend()
+    # Jev and Haiku each take 0.3 s: one after the other would be 0.6 s.
+    backend.delays = {"api.typesafe.ai": 0.3, "claude": 0.3}
+    start = time.perf_counter()
+    events = run_line(backend, line())
+    seconds = time.perf_counter() - start
+
+    assert types(events) == ["transcript", "whisper"]
+    assert seconds < 0.5, f"{seconds:.2f}s"
+
+
+def test_no_draft_is_used_when_jev_says_no_reply():
+    backend = Backend()
+    backend.jev = jev_response(should_whisper=0.1)
+    events = run_line(backend, line())
+
+    assert types(events) == ["transcript"]
+
+
+def test_the_wearers_own_line_starts_no_draft():
+    backend = Backend()
+    run_line(backend, line(speaker="me"))
+
+    assert not [r for r in backend.claude_requests if "earpiece" in str(r.get("system", ""))]
 
 
 def test_partial_transcripts_are_ignored():

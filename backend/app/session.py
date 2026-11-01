@@ -34,6 +34,21 @@ class Deps:
     claude: anthropic.AsyncAnthropic
 
 
+class Draft:
+    """A whisper Haiku started writing before Jev decided whether one is needed."""
+
+    def __init__(self, task: asyncio.Task, photo_coming: bool) -> None:
+        self.task = task
+        self.photo_coming = photo_coming
+
+    def drop(self) -> None:
+        """Cancels it if it wasn't used, and swallows its error so nothing logs it as lost."""
+        if not self.task.done():
+            self.task.cancel()
+        elif not self.task.cancelled():
+            self.task.exception()
+
+
 class Session:
     def __init__(self, deps: Deps) -> None:
         self.deps = deps
@@ -88,6 +103,18 @@ class Session:
         line = {"speaker": msg.speaker or "unknown", "text": text}
         self.history.append(line)
 
+        # Speed: a line that could be theirs usually needs a reply, so Haiku starts writing it
+        # while Jev decides, instead of after. If Jev says no, the draft is dropped.
+        draft: Draft | None = None
+        if msg.speaker != "me" and time.monotonic() - self.last_whisper_at >= self.deps.settings.whisper_cooldown_s:
+            draft = Draft(asyncio.create_task(self._write_whisper()), photo_coming=self.photo_in_flight)
+        try:
+            await self._handle_decided(msg, text, line, draft)
+        finally:
+            if draft:
+                draft.drop()
+
+    async def _handle_decided(self, msg: TranscriptIn, text: str, line: dict, draft: "Draft | None") -> None:
         try:
             decision = await decide(self.deps.http, self.deps.settings, self._jev_state())
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
@@ -134,9 +161,18 @@ class Session:
         if who_spoke in ("me", "them"):
             self._maybe_launch_task(decision)
         if who_spoke == "them":
-            await self._maybe_whisper(decision)
+            await self._maybe_whisper(decision, draft)
 
-    async def _maybe_whisper(self, decision: Decision) -> None:
+    async def _write_whisper(self, photo_coming: bool | None = None):
+        return await write_whisper(
+            self.deps.claude,
+            self.deps.settings,
+            self._transcript_text(),
+            photo_coming=self.photo_in_flight if photo_coming is None else photo_coming,
+            persona=self.persona,
+        )
+
+    async def _maybe_whisper(self, decision: Decision, draft: "Draft | None" = None) -> None:
         settings = self.deps.settings
         now = time.monotonic()
         if decision.should_whisper < settings.should_whisper_threshold:
@@ -148,13 +184,12 @@ class Session:
         previous_whisper_at = self.last_whisper_at
         self.last_whisper_at = now
         try:
-            whisper = await write_whisper(
-                self.deps.claude,
-                settings,
-                self._transcript_text(),
-                photo_coming=self.photo_in_flight,
-                persona=self.persona,
-            )
+            # The early draft is used unless a photo search started on this very line: then
+            # the line should stall for it, so it's written again knowing that.
+            if draft and draft.photo_coming == self.photo_in_flight:
+                whisper = await draft.task
+            else:
+                whisper = await self._write_whisper()
         except anthropic.APIError as exc:
             log.warning("Whisper call failed: %r", exc)
             whisper = None
