@@ -178,40 +178,39 @@ struct ContentView: View {
     // MARK: Proof
 
     @ViewBuilder private var proof: some View {
-        if !model.tasks.isEmpty || model.lastPhoto != nil {
-            HStack(alignment: .center, spacing: 12) {
-                if let photo = model.lastPhoto {
-                    Image(uiImage: photo)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 54, height: 72)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .accessibilityLabel("Proof photo")
+        if let task = model.tasks.last {
+            Group {
+                if task.done, let photo = model.lastPhoto {
+                    Button { model.openPhoto() } label: {
+                        FoundPhotoCard(photo: photo, notice: model.photoNotice, saved: model.lastPhotoSaved)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(model.lastPhotoSaved ? "Opens Photos" : "Shows the photo")
+                } else {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(!task.done ? task.label : task.imageUrl == nil ? "No photo this time" : "Getting the photo…")
+                                .font(Theme.emphasis)
+                                .foregroundStyle(Theme.text)
+                                .lineLimit(1)
+                            if !task.done { MetaText("searching…") }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(12)
+                    .background(CardBackground())
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    if let task = model.tasks.last {
-                        Text(task.done ? (model.lastPhoto == nil ? "No photo this time" : "Photo found") : task.label)
-                            .font(Theme.emphasis)
-                            .foregroundStyle(Theme.text)
-                            .lineLimit(1)
-                    }
-                    if let notice = model.photoNotice {
-                        Text(notice)
-                            .font(Theme.body)
-                            .foregroundStyle(Theme.text2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if model.lastPhotoSaved {
-                        MetaText("saved to photos", color: Theme.up)
-                    } else if model.tasks.last?.done == false {
-                        MetaText("searching…")
-                    }
-                }
-                Spacer(minLength: 0)
             }
-            .padding(12)
-            .background(CardBackground())
             .transition(Theme.rise)
+            .animation(Theme.appear, value: model.lastPhoto)
+            // A buzz too, in case the alert in the ear was missed.
+            .sensoryFeedback(.success, trigger: model.lastPhotoSaved) { _, saved in saved }
+            .fullScreenCover(isPresented: Binding(get: { model.showsPhotoFullScreen },
+                                                  set: { model.showsPhotoFullScreen = $0 })) {
+                if let photo = model.lastPhoto {
+                    PhotoViewer(image: photo) { model.showsPhotoFullScreen = false }
+                }
+            }
         }
     }
 
@@ -353,6 +352,83 @@ private struct CoverReading: View {
         case ..<0.67: Theme.surface2
         default: Theme.downTint
         }
+    }
+}
+
+/// The proof photo, landed: the one green card on screen, so it's seen at a glance.
+/// Tapping it opens Photos, where the photo is the newest.
+private struct FoundPhotoCard: View {
+    let photo: UIImage
+    let notice: String?
+    let saved: Bool
+
+    private let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(uiImage: photo)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 60, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Theme.up.opacity(0.4), lineWidth: 1))
+                .accessibilityLabel("Proof photo")
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    PulsingDot(color: Theme.up, pulsing: true)
+                    Text("Photo found")
+                        .font(Theme.emphasis)
+                        .foregroundStyle(Theme.up)
+                }
+                if let notice {
+                    Text(notice)
+                        .font(Theme.body)
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                MetaText(saved ? "in your camera roll · tap to open" : "tap to show", color: Theme.up.opacity(0.85))
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.up)
+        }
+        .padding(12)
+        .background(
+            shape
+                .fill(Theme.surface)
+                .overlay(shape.fill(LinearGradient(colors: [Theme.up.opacity(0.24), Theme.up.opacity(0.03)],
+                                                   startPoint: .leading, endPoint: .trailing)))
+                .overlay(shape.strokeBorder(Theme.up.opacity(0.5), lineWidth: 1))
+                .shadow(color: Theme.up.opacity(0.22), radius: 16)
+        )
+        .contentShape(shape)
+    }
+}
+
+/// The proof photo full screen, for when it isn't in the camera roll or Photos won't open.
+private struct PhotoViewer: View {
+    let image: UIImage
+    let close: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Theme.surface))
+            }
+            .padding(16)
+            .accessibilityLabel("Close")
+        }
+        .onTapGesture(perform: close)
     }
 }
 

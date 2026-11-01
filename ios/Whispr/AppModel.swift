@@ -80,6 +80,8 @@ final class AppModel {
     var lastPhoto: UIImage?
     /// Whether lastPhoto made it into the camera roll.
     var lastPhotoSaved = false
+    /// The photo full screen in the app, when it isn't in (or Photos won't open to) the camera roll.
+    var showsPhotoFullScreen = false
 
     // MARK: Panic button state
 
@@ -376,6 +378,8 @@ final class AppModel {
             risk = score
         case let .taskStarted(id, _, label):
             photoNotice = nil
+            lastPhoto = nil
+            lastPhotoSaved = false
             tasks.append(ProofTask(id: id, label: label))
         case let .taskDone(id, _, _, imageUrl, _, _):
             let url = imageUrl.flatMap(URL.init(string:))
@@ -410,6 +414,19 @@ final class AppModel {
             break
         }
     }
+
+    /// Opens the Photos app, where the proof photo is the newest one. There's no public way
+    /// to open one particular photo, so this opens the library; if the photo isn't saved or
+    /// Photos won't open, it shows full screen here instead.
+    func openPhoto() {
+        guard lastPhoto != nil else { return }
+        Task {
+            let opened = lastPhotoSaved ? await UIApplication.shared.open(Self.photosApp) : false
+            if !opened { showsPhotoFullScreen = true }
+        }
+    }
+
+    private static let photosApp = URL(string: "photos-redirect://")!
 
     private func savePhoto(_ url: URL) async {
         let image: UIImage
