@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { WebSocket } from "ws";
 import { BrainLink, type BrainEvent } from "./brainLink.js";
 import { config } from "./config.js";
-import { ScribeSession, type Segment } from "./ears/scribe.js";
+import { LINE_SILENCE_SECONDS, ScribeSession, TURN_SILENCE_SECONDS, type Segment } from "./ears/scribe.js";
 import { couldBeSameVoice, SpeakerModel, splitBySpeaker, type TimedWord, type Who } from "./ears/speakers.js";
 import { voiceprint, type Voiceprint } from "./ears/voiceprint.js";
 import { cacheImage } from "./media.js";
@@ -68,6 +68,8 @@ export class PhoneSession {
   private pendingLines: { id: string; text: string; speaker: Speaker; audio: Buffer | null }[] = [];
   /** Uncalibrated voices, learnt from lines Jev is sure about (see `learnVoice`). */
   private learning: Record<Who, Buffer[]> = { me: [], them: [] };
+  /** Strict turn-taking (a rigged demo): who the next line is, regardless of voice. */
+  private turns: { next: Who } | null = null;
   /** Lines in a row that didn't match the voice being learnt; two mean the start was wrong. */
   private learningMisses: Record<Who, number> = { me: 0, them: 0 };
   /** Whispers are spoken one after another, never over each other. */
@@ -132,6 +134,16 @@ export class PhoneSession {
     }
     if (msg.type === "ping") this.send({ type: "pong" });
     if (msg.type === "debug_turn" && msg.text) this.onTurn(msg.text, msg.speaker ?? "them");
+    if (msg.type === "set_turns") {
+      // Starts again with the wearer each time it's switched on.
+      this.turns = msg.alternate ? { next: "me" } : null;
+      this.scribe.setLineSilence(msg.alternate ? TURN_SILENCE_SECONDS : LINE_SILENCE_SECONDS);
+      this.send({ type: "turn", next: this.turns?.next ?? null });
+    }
+    if (msg.type === "flip_turn" && this.turns) {
+      this.turns.next = this.turns.next === "me" ? "them" : "me";
+      this.send({ type: "turn", next: this.turns.next });
+    }
     if (msg.type === "calibrate") {
       const who: Who = msg.who === "them" ? "them" : "me";
       const asked = Number(msg.seconds);
@@ -256,6 +268,18 @@ export class PhoneSession {
 
     // A quick back-and-forth can arrive as one line: split it where the voice changes.
     const parts = words ? splitBySpeaker(words, printOf, this.speakers) : null;
+    if (this.turns) {
+      // Strict turns: voices don't decide, the order does. A line holding both voices
+      // still counts as two turns.
+      for (const part of parts ?? [{ text }]) {
+        const speaker = this.turns.next;
+        this.turns.next = speaker === "me" ? "them" : "me";
+        console.log(`${tag} ${speaker} (turn): ${part.text}`);
+        this.onTurn(part.text, speaker);
+      }
+      this.send({ type: "turn", next: this.turns.next });
+      return;
+    }
     if (parts) {
       console.log(`${tag} split by voice: ${parts.map((p) => `${p.speaker}: ${p.text}`).join(" | ")}`);
       for (const part of parts) this.onTurn(part.text, part.speaker);

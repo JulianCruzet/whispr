@@ -150,6 +150,17 @@ final class AppModel {
         }
     }
 
+    /// Strict turn-taking for a rigged demo: the wearer speaks first, then them, then the
+    /// wearer, whatever the voices sound like.
+    var takeTurns = false {
+        didSet {
+            UserDefaults.standard.set(takeTurns, forKey: "takeTurns")
+            sendTurns()
+        }
+    }
+    /// Who the next line will be labelled as, while turn-taking is on.
+    private(set) var nextTurn: Speaker?
+
     private let client = BackendClient()
     private let audio = AudioPipeline()
     private let callKit = FakeCallKit()
@@ -167,6 +178,7 @@ final class AppModel {
         persona = Persona(rawValue: UserDefaults.standard.string(forKey: "persona") ?? "") ?? .fan
         panicCallerName = UserDefaults.standard.string(forKey: "panicCallerName") ?? "Mom"
         panicUsesCallKit = UserDefaults.standard.bool(forKey: "panicUsesCallKit")
+        takeTurns = UserDefaults.standard.bool(forKey: "takeTurns")
         panicDelaySeconds = UserDefaults.standard.object(forKey: "panicDelaySeconds") as? Int ?? 0
 
         callKit.onAnswered = { [weak self] in Task { @MainActor in self?.answerFakeCall() } }
@@ -341,6 +353,15 @@ final class AppModel {
         vibrationTask = nil
     }
 
+    private func sendTurns() {
+        client.send(json: ["type": "set_turns", "alternate": takeTurns])
+    }
+
+    /// Turn-taking slipped (a line split in two, say): swap who is next.
+    func flipTurn() {
+        client.send(json: ["type": "flip_turn"])
+    }
+
     private func sendPersona() {
         client.send(json: ["type": "set_persona", "persona": persona.rawValue])
     }
@@ -404,6 +425,7 @@ final class AppModel {
             lastError = nil
             // A new backend session starts on the default persona.
             sendPersona()
+            sendTurns()
         case let .transcript(id, text, final, speaker):
             if final {
                 partial = ""
@@ -460,6 +482,8 @@ final class AppModel {
             lastError = message
         case .whisperAudioEnd:
             speaking = false
+        case let .turn(next):
+            nextTurn = next
         case .pong:
             break
         }

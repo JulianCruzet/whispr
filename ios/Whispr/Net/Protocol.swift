@@ -25,13 +25,15 @@ enum ServerEvent {
     /// `reason` is "too_short" or "sounds_like_you" (their sample was the wearer's voice).
     case calibrated(who: String, ok: Bool, reason: String?)
     case error(message: String)
+    /// With turn-taking on, who the next line will be labelled as; nil when it's off.
+    case turn(next: Speaker?)
     case pong
 }
 
 extension ServerEvent: Decodable {
     private enum Key: String, CodingKey {
         case type, sessionId, integrations, id, text, final, speaker, sampleRate, score, reason
-        case kind, label, ok, imageUrl, caption, emailed, message, who, seconds, target
+        case kind, label, ok, imageUrl, caption, emailed, message, who, seconds, target, next
     }
 
     init(from decoder: Decoder) throws {
@@ -78,6 +80,8 @@ extension ServerEvent: Decodable {
                                reason: try c.decodeIfPresent(String.self, forKey: .reason))
         case "error":
             self = .error(message: try c.decode(String.self, forKey: .message))
+        case "turn":
+            self = .turn(next: try c.decodeIfPresent(Speaker.self, forKey: .next))
         case "pong":
             self = .pong
         default:

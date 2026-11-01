@@ -42,12 +42,35 @@ struct ContentView: View {
                 LabelText(model.persona.label)
             }
             Spacer()
-            Button {
-                showCalibration = true
-            } label: {
-                VoicesChip(voices: model.calibratedVoices)
+            Group {
+            if model.takeTurns, let next = model.nextTurn {
+                // Turn-taking: who the next line goes to; a tap swaps it if the order slipped.
+                Button {
+                    model.flipTurn()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.left.arrow.right")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(next == .me ? "Next: You" : "Next: Them")
+                            .font(Theme.label)
+                    }
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(Capsule().fill(Theme.surface2))
+                    .overlay(Capsule().strokeBorder(Theme.lineStrong, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(next == .me ? "Next line is yours. Tap to swap." : "Next line is theirs. Tap to swap.")
+            } else {
+                Button {
+                    showCalibration = true
+                } label: {
+                    VoicesChip(voices: model.calibratedVoices)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            }
             .sheet(isPresented: $showCalibration) {
                 NavigationStack { CalibrationView() }
             }

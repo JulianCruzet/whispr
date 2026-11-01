@@ -21,10 +21,12 @@ struct SettingsView: View {
                     }
                     Section {
                         NavigationLink("Calibrate voices") { CalibrationView() }
+                        Toggle("Take turns", isOn: $model.takeTurns)
+                            .tint(Theme.up)
                     } header: {
                         Text("Voices")
                     } footer: {
-                        Text("Before the demo: 15 seconds of each of you talking, so Whispr knows exactly who is who.")
+                        Text("Before the demo: 15 seconds of each of you talking, so Whispr knows exactly who is who. Take turns ignores voices: you speak first, then them, then you. Leave a short beat between turns; tap Next on the main screen if it slips.")
                     }
                     Section {
                         Picker("Listen with", selection: $model.micSource) {

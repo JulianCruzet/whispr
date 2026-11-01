@@ -13,6 +13,8 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `{"type":"clear_calibration"}`: forget both voice samples, calibrated or learnt, for this phone |
 | text | `{"type":"cancel_calibration"}`: stop a calibration step in progress, keeping nothing. Nothing said during calibration ever reaches the brain or the conversation |
 | text | `{"type":"set_persona","persona":"first_date"}`: who the wearer is playing: `fan` (default), `interview`, `first_date` or `car_salesman`. Send it on every `ready` and when it changes. Changing it clears the conversation so far |
+| text | `{"type":"set_turns","alternate":true}`: strict turn-taking for a rigged demo. Lines are labelled `me`, `them`, `me`... in order, starting with the wearer, whatever the voices sound like; a line holding both voices counts as two turns. Scribe then ends a line after 0.7 s of silence instead of 0.4 s. Send it on every `ready` |
+| text | `{"type":"flip_turn"}`: turn-taking slipped, swap who is next |
 | text | `{"type":"ping"}` |
 
 ## Backend → phone
@@ -28,6 +30,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `task_done` `{id, kind, ok, imageUrl?, caption?}`: `imageUrl` normally points at this gateway (`/media/<id>`), which downloads the photo so the phone never hits a host that blocks it. If the gateway couldn't fetch it, it's the original address |
 | text | `calibrating` `{who, seconds, target}`: calibration progress, seconds talked so far out of `target`. Sent live (every 250 ms) while they talk, and again when each line is finished |
 | text | `calibrated` `{who, ok, reason?}`: the calibration finished. `ok:false` comes with `reason` `too_short` (under 1.5 s of speech in 4 lines) or `sounds_like_you` (the other person's sample was really the wearer). Also sent on connect for samples a returning `deviceId` already has |
+| text | `turn` `{next}`: with turn-taking on, who the next line will be labelled as (`null` when it's off) |
 | text | `error` `{message}`, `pong` |
 
 ## When is a turn finished?
