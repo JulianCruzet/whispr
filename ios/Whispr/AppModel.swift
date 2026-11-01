@@ -33,6 +33,10 @@ final class AppModel {
     /// Current audio route, e.g. "Mic: WH-1000XM5 · Voice: WH-1000XM5".
     var route = ""
 
+    enum Calibration: Equatable { case none, listening, done, failed }
+    /// Whether the backend has learned the wearer's voice level (so it can tell "me" from "them").
+    var calibration: Calibration = .none
+
     var lastPhoto: UIImage?
 
     var backendURL: String {
@@ -114,6 +118,12 @@ final class AppModel {
         await startListening()
     }
 
+    /// The next sentence the wearer says teaches the backend how loud their own voice is.
+    func calibrate() {
+        client.send(json: ["type": "calibrate"])
+        calibration = .listening
+    }
+
     /// Pretend the other person said `text` (skips speech-to-text). For testing and demo fallback.
     func sendTestLine(_ text: String) {
         client.send(json: ["type": "debug_turn", "text": text, "speaker": "them"])
@@ -122,7 +132,9 @@ final class AppModel {
     private func handle(_ event: ServerEvent) {
         switch event {
         case .ready:
+            // A new backend session hasn't heard the wearer's voice yet.
             connection = .connected
+            calibration = .none
             lastError = nil
         case let .transcript(id, text, final, speaker):
             if final {
@@ -146,6 +158,8 @@ final class AppModel {
             if let url { Task { await savePhoto(url) } }
         case let .whisperAudioStart(_, sampleRate):
             audio.setPlaybackSampleRate(Double(sampleRate))
+        case let .calibrated(ok, _):
+            calibration = ok ? .done : .failed
         case let .error(message):
             lastError = message
         case .whisperAudioEnd, .pong:
