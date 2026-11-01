@@ -42,6 +42,10 @@ struct ContentView: View {
                 LabelText(model.persona.label)
             }
             Spacer()
+            if !model.calibratedVoices.isEmpty {
+                VoicesChip(voices: model.calibratedVoices)
+                    .transition(.opacity)
+            }
             ConnectionChip(connection: model.connection, listening: model.listening)
             Button {
                 showSettings = true
@@ -55,6 +59,7 @@ struct ContentView: View {
             }
             .accessibilityLabel("Settings")
         }
+        .animation(Theme.appear, value: model.calibratedVoices)
     }
 
     // MARK: The line to say
@@ -299,6 +304,29 @@ private struct ConnectionChip: View {
         case .connecting: Theme.muted
         case .disconnected: Theme.down
         }
+    }
+}
+
+/// Whose voices are calibrated: green when both are, so who said what is decided by voice.
+private struct VoicesChip: View {
+    let voices: Set<Speaker>
+
+    private var both: Bool { voices.contains(.me) && voices.contains(.them) }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: both ? "person.2.wave.2.fill" : "person.wave.2.fill")
+                .font(.system(size: 11, weight: .semibold))
+            Text(both ? "Voices" : voices.contains(.me) ? "You" : "Them")
+                .font(Theme.label)
+        }
+        .foregroundStyle(both ? Theme.up : Theme.text2)
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(Capsule().fill(both ? Theme.upTint : Theme.surface))
+        .overlay(Capsule().strokeBorder(both ? Theme.up.opacity(0.45) : Theme.line, lineWidth: 1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(both ? "Both voices calibrated" : voices.contains(.me) ? "Your voice calibrated" : "Their voice calibrated")
     }
 }
 
