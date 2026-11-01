@@ -137,12 +137,15 @@ export class PhoneSession {
       const asked = Number(msg.seconds);
       const long = Number.isFinite(asked) && asked > CALIBRATION_TARGET_SECONDS[who];
       const target = long ? Math.min(asked, CALIBRATION_LONGEST_SECONDS) : CALIBRATION_TARGET_SECONDS[who];
-      // A long one runs as many lines as it takes, and lets the wearer prompt them more often.
+      // A long one (the app's calibration page) runs as many lines as it takes. There the
+      // person talking is chosen on purpose, so none of their lines is second-guessed as the
+      // wearer's: with two real voices that threw away whole 15 s lines. The final
+      // sounds-like-you check still refuses a sample that is really the wearer.
       this.calibrating = {
         who,
         target,
         maxLines: long ? Math.ceil(target) * 2 : CALIBRATION_MAX_LINES,
-        maxSkips: long ? Math.max(2, Math.round(target / 3)) : 2,
+        maxSkips: long ? 0 : 2,
         audio: [],
         lines: 0,
         skipped: 0,

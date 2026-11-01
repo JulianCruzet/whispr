@@ -10,7 +10,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, test } from "node:test";
 import { WebSocketServer, type WebSocket as ServerSocket } from "ws";
-import { ALEX, KIM, speak } from "./voices.js";
+import { ALEX, KIM, SAM, speak } from "./voices.js";
 
 // Must be set before the gateway's config loads (dotenv never overrides set variables).
 process.env.ELEVENLABS_API_KEY = "";
@@ -486,6 +486,19 @@ describe("calibration", () => {
     assert.equal(phone.events("calibrated").length, 0);
     await until(() => brain.received.some((m) => m.text === "back to the conversation"));
     assert.ok(!brain.received.some((m) => m.text === "half a calibration"));
+  });
+
+  test("a 15 s step for them keeps every line, even in a voice close to the wearer's", async () => {
+    brain.reply = () => [];
+    const { phone, session } = voiceSession();
+    phone.say({ type: "calibrate", who: "me", seconds: 15 });
+    speakInto(session, "me, for fifteen seconds", speak(ALEX, 16, 100));
+    phone.say({ type: "calibrate", who: "them", seconds: 15 });
+    // A similar voice: some of its lines "could be" the wearer.
+    for (let i = 0; i < 5 && phone.events("calibrated").length < 2; i++) speakInto(session, `them ${i}`, speak(SAM, 3.2, 101 + i));
+    const theirs = phone.events("calibrating").filter((e) => e.who === "them").map((e) => e.seconds);
+    assert.ok(theirs.every((s, i) => i === 0 || s >= theirs[i - 1]), `the bar never goes back: ${theirs}`);
+    assert.deepEqual(phone.events("calibrated").at(-1), { type: "calibrated", who: "them", ok: true });
   });
 
   test("gives up after 4 lines without enough speech", async () => {
