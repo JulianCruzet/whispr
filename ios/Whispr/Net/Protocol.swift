@@ -19,8 +19,11 @@ enum ServerEvent {
     case risk(score: Double)
     case taskStarted(id: String, kind: String, label: String)
     case taskDone(id: String, kind: String, ok: Bool, imageUrl: String?, caption: String?, emailed: Bool?)
-    /// `who` is "me" or "them": whose voice sample was just taken.
-    case calibrated(who: String, ok: Bool)
+    /// Calibration progress: `seconds` of `who`'s speech heard so far, out of `target`.
+    case calibrating(who: String, seconds: Double, target: Double)
+    /// `who` is "me" or "them": whose voice sample was just taken. When `ok` is false,
+    /// `reason` is "too_short" or "sounds_like_you" (their sample was the wearer's voice).
+    case calibrated(who: String, ok: Bool, reason: String?)
     case error(message: String)
     case pong
 }
@@ -28,7 +31,7 @@ enum ServerEvent {
 extension ServerEvent: Decodable {
     private enum Key: String, CodingKey {
         case type, sessionId, integrations, id, text, final, speaker, sampleRate, score, reason
-        case kind, label, ok, imageUrl, caption, emailed, message, who
+        case kind, label, ok, imageUrl, caption, emailed, message, who, seconds, target
     }
 
     init(from decoder: Decoder) throws {
@@ -65,9 +68,14 @@ extension ServerEvent: Decodable {
                              imageUrl: try c.decodeIfPresent(String.self, forKey: .imageUrl),
                              caption: try c.decodeIfPresent(String.self, forKey: .caption),
                              emailed: try c.decodeIfPresent(Bool.self, forKey: .emailed))
+        case "calibrating":
+            self = .calibrating(who: try c.decode(String.self, forKey: .who),
+                                seconds: try c.decode(Double.self, forKey: .seconds),
+                                target: try c.decode(Double.self, forKey: .target))
         case "calibrated":
             self = .calibrated(who: try c.decodeIfPresent(String.self, forKey: .who) ?? "me",
-                               ok: try c.decode(Bool.self, forKey: .ok))
+                               ok: try c.decode(Bool.self, forKey: .ok),
+                               reason: try c.decodeIfPresent(String.self, forKey: .reason))
         case "error":
             self = .error(message: try c.decode(String.self, forKey: .message))
         case "pong":

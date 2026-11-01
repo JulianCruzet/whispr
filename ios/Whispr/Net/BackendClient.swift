@@ -9,12 +9,15 @@ final class BackendClient: NSObject, @unchecked Sendable {
     private var task: URLSessionWebSocketTask?
     private lazy var session = URLSession(configuration: .default)
 
-    func connect(to url: URL) {
+    /// `deviceId` lets the backend keep this phone's voice calibration across reconnects.
+    func connect(to url: URL, deviceId: String?) {
         disconnect()
         let task = session.webSocketTask(with: url)
         self.task = task
         task.resume()
-        send(json: ["type": "hello", "device": "iphone", "sampleRate": 16000])
+        var hello: [String: Any] = ["type": "hello", "device": "iphone", "sampleRate": 16000]
+        if let deviceId { hello["deviceId"] = deviceId }
+        send(json: hello)
         receive(on: task)
     }
 
