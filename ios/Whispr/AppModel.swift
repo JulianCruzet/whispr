@@ -81,6 +81,9 @@ final class AppModel {
         var seconds: Double? { self == .demo ? 15 : nil }
     }
     private(set) var calibrationLength: CalibrationLength = .quick
+    /// Whose voice samples the backend has, for the header's voices chip. A failed retry
+    /// keeps the old sample, so it only ever grows until a new backend session.
+    private(set) var calibratedVoices: Set<Speaker> = []
     /// The wearer chose to go on without the other person's sample; a reconnect keeps that.
     private var skippedThem = false
 
@@ -380,6 +383,8 @@ final class AppModel {
             connection = .connected
             reconnectAttempt = 0
             calibration = .none
+            // The backend replays the samples it kept for this phone right after this.
+            calibratedVoices = []
             lastError = nil
             // A new backend session starts on the default persona.
             sendPersona()
@@ -427,6 +432,7 @@ final class AppModel {
         case let .calibrated(who, ok, reason):
             // Also arrives right after connecting, for samples the backend kept for this phone.
             let speaker: Speaker = who == "them" ? .them : .me
+            if ok { calibratedVoices.insert(speaker) }
             if !ok {
                 calibration = .failed(speaker, soundedLikeYou: reason == "sounds_like_you")
             } else if speaker == .them {
