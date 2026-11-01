@@ -16,6 +16,15 @@ struct SettingsView: View {
                     Button("Reconnect") { model.connect() }
                 }
                 Section {
+                    Picker("Playing", selection: $model.persona) {
+                        ForEach(Persona.allCases) { Text($0.label).tag($0) }
+                    }
+                } header: {
+                    Text("Persona")
+                } footer: {
+                    Text("Who Roxy coaches you to be. Changing it starts a new scene.")
+                }
+                Section {
                     Picker("Listen with", selection: $model.micSource) {
                         ForEach(MicSource.allCases) { Text($0.label).tag($0) }
                     }
