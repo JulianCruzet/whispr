@@ -782,7 +782,8 @@ def ranked_search(results: list[dict], rank: dict[str, float] | None, looks: dic
 
 PRESS = {
     "title": "Drake speaks at a press conference",
-    "source": "gettyimages.com",
+    # Not a stock site, so it reaches Jev and Haiku (stock sites are dropped before them).
+    "source": "news.example",
     "properties": {"url": "https://img.example/press.jpg"},
     "thumbnail": {"src": "https://thumb.example/press.jpg"},
 }
@@ -792,6 +793,29 @@ CONCERT = {
     "properties": {"url": "https://img.example/concert.jpg"},
     "thumbnail": {"src": "https://thumb.example/concert.jpg"},
 }
+
+
+def test_a_stock_or_press_site_photo_is_never_used_even_ranked_first():
+    getty = {
+        "title": "Drake speaks to the crowd prior to the fight",
+        "source": "gettyimages.ca",
+        "properties": {"url": "https://media.gettyimages.com/id/813535374/photo/drake.jpg"},
+        "thumbnail": {"src": "https://thumb.example/getty.jpg"},
+    }
+    done = ranked_search([getty, CONCERT], rank={"r0": 0.9, "r1": 0.1})
+
+    assert done["image_url"] == CONCERT["properties"]["url"]
+
+
+def test_haikus_look_wants_a_fans_view_of_the_event():
+    backend = Backend()
+    backend.search_results = [CONCERT]
+    backend.images = {CONCERT["properties"]["url"]: image_bytes(1080, 1920)}
+    done_event(backend)
+
+    look = next(r for r in backend.claude_requests if isinstance(r["messages"][0]["content"], list))
+    question = look["messages"][0]["content"][1]["text"]
+    assert "from the audience" in question and "plain backdrop" in question
 
 
 def test_jev_ranks_a_real_concert_photo_above_a_press_photo():
@@ -845,7 +869,7 @@ def test_jev_sees_titles_and_sources_not_just_urls():
 
     ask = next(r for r in backend.jev_requests if "best_photo" in r["questions"])
     criteria = ask["questions"]["best_photo"]["criteria"]
-    assert criteria["r0"] == "Drake speaks at a press conference (from gettyimages.com)"
+    assert criteria["r0"] == "Drake speaks at a press conference (from news.example)"
     assert "Scotiabank Arena" in criteria["r1"]
 
 

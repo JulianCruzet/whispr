@@ -28,6 +28,34 @@ MIN_SHORT_SIDE = 400
 # which can see, looks at the top few. A photo it rejects is never sent.
 JEV_RANK_TIMEOUT_S = 2.0
 LOOK_COUNT = 3
+# Stock and press agencies: their photos are posed or shot from the press pit, never what
+# a fan took on their phone, and Haiku sometimes let one through (a Getty shot of Drake
+# with a mic in front of a backdrop). Results from these sites are never used.
+PRESS_SITES = (
+    "gettyimages.",
+    "shutterstock.",
+    "alamy.",
+    "istockphoto.",
+    "stock.adobe.",
+    "dreamstime.",
+    "depositphotos.",
+    "123rf.",
+    "wireimage.",
+    "apimages.",
+    "reuters.",
+    "zumapress.",
+    "imago-images.",
+)
+
+
+def _from_press_site(result: dict) -> bool:
+    """True if a search result's image or page is on a stock or press photo site."""
+    where = " ".join(
+        str(part).lower()
+        for part in (result.get("properties", {}).get("url"), result.get("url"), result.get("source"))
+        if part
+    )
+    return any(site in where for site in PRESS_SITES)
 
 # Many image hosts refuse non-browser clients (e.g. Wikimedia answers python-httpx with 403),
 # so fetch images the way the phone's browser would.
@@ -151,9 +179,12 @@ async def _looks_right(
                         {
                             "type": "text",
                             "text": (
-                                f"Is this a real photo of {query}: the actual event, seen by "
-                                "someone there (not a press photo, poster, meme or a different "
-                                "event)? Answer only yes or no."
+                                f"Could a fan have taken this photo on their phone at {query}? "
+                                "Answer yes only if it shows the event itself from the audience: "
+                                "a stage, stage lights or a crowd in view. Answer no for a press "
+                                "photo, a posed or studio shot, a red carpet, a press conference, "
+                                "a person in front of a plain backdrop or banner, a poster, a meme "
+                                "or a different event. Answer only yes or no."
                             ),
                         },
                     ],
@@ -187,6 +218,7 @@ async def _search(
         result
         for result in response.json().get("results", [])
         if result.get("properties", {}).get("url", "").startswith("https://")
+        and not _from_press_site(result)
     ][:PROBE_COUNT]
     # Jev's ranking and the size checks each need only the search results, so run them together.
     ranked, probes = await asyncio.gather(
