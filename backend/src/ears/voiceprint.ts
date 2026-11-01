@@ -39,8 +39,13 @@ export const FEATURES = CEPSTRA + 2;
 export const PITCH = CEPSTRA;
 export const LEVEL = CEPSTRA + 1;
 
-/** Voiceprint of PCM16 mono 16 kHz audio, or null if there isn't enough speech in it. */
-export function voiceprint(pcm: Buffer): Voiceprint | null {
+/**
+ * Voiceprint of PCM16 mono 16 kHz audio, or null if there isn't enough speech in it.
+ * `roomFloorDb` is the room's noise level from recent audio (see ScribeSession). A line
+ * cut to its words has almost no silence in it, so its own quietest frames are quiet
+ * speech, and using them as the noise floor threw most of the speech away.
+ */
+export function voiceprint(pcm: Buffer, roomFloorDb: number | null = null): Voiceprint | null {
   const samples = toFloat(pcm);
   if (samples.length < FRAME * 4) return null;
 
@@ -50,7 +55,7 @@ export function voiceprint(pcm: Buffer): Voiceprint | null {
   for (let f = 0; f < frameCount; f++) frameDb[f] = rmsDb(samples, f * HOP, FRAME);
   const loudest = Math.max(...frameDb);
   // The quietest tenth of frames is the room between words: the noise floor.
-  const noiseFloor = [...frameDb].sort((a, b) => a - b)[Math.floor(frameCount * 0.1)];
+  const noiseFloor = roomFloorDb ?? [...frameDb].sort((a, b) => a - b)[Math.floor(frameCount * 0.1)];
   const threshold = Math.max(SILENCE_DB, loudest - SPEECH_RANGE_DB, noiseFloor + ABOVE_NOISE_DB);
   const speech: number[] = [];
   for (let f = 0; f < frameCount; f++) {

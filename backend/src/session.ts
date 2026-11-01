@@ -207,7 +207,7 @@ export class PhoneSession {
     sampling.lines++;
     if (words) sampling.talked += words[words.length - 1].end - words[0].start;
     sampling.lineStartedAt = null;
-    const sample = sampling.audio.length ? voiceprint(Buffer.concat(sampling.audio)) : null;
+    const sample = sampling.audio.length ? voiceprint(Buffer.concat(sampling.audio), this.scribe.noiseFloorDb()) : null;
     // `seconds` is speech in the sample itself (pauses and breaths don't count).
     const seconds = sample?.seconds ?? 0;
     const { target, talked } = sampling;
@@ -243,7 +243,7 @@ export class PhoneSession {
     if (segment) segment = { ...segment, words: segment.words.filter((w) => !/[()[\]]/.test(w.text)) };
     const printOf = (from: number, to: number) => {
       const audio = this.scribe.audioBetween(from, to);
-      return audio ? voiceprint(audio) : null;
+      return audio ? voiceprint(audio, this.scribe.noiseFloorDb()) : null;
     };
     const words = segment?.words.length ? segment.words : null;
     const print = words ? printOf(words[0].start, words[words.length - 1].end) : null;
@@ -291,11 +291,11 @@ export class PhoneSession {
    */
   private learnVoice(who: Who, audio: Buffer) {
     if (this.calibrating || this.speakers.calibrated[who]) return;
-    const print = voiceprint(audio);
+    const print = voiceprint(audio, this.scribe.noiseFloorDb());
     if (!print || print.seconds < 1) return;
     // The other person's voice must not catch the wearer's.
     if (who === "them" && this.speakers.couldBe("me", print)) return;
-    const sofar = this.learning[who].length ? voiceprint(Buffer.concat(this.learning[who])) : null;
+    const sofar = this.learning[who].length ? voiceprint(Buffer.concat(this.learning[who]), this.scribe.noiseFloorDb()) : null;
     if (sofar && sofar.seconds >= CALIBRATION_MIN_SECONDS && !couldBeSameVoice(print, sofar)) {
       // Two misses in a row: the lines learnt so far were probably the wrong voice.
       if (++this.learningMisses[who] < 2) return;
@@ -303,7 +303,7 @@ export class PhoneSession {
     }
     this.learningMisses[who] = 0;
     this.learning[who].push(audio);
-    const sample = voiceprint(Buffer.concat(this.learning[who]));
+    const sample = voiceprint(Buffer.concat(this.learning[who]), this.scribe.noiseFloorDb());
     if (!sample || sample.seconds < LEARN_TARGET_SECONDS[who]) return;
     const lines = this.learning[who].length;
     this.learning[who] = [];

@@ -87,6 +87,27 @@ describe("fallbacks", () => {
     assert.equal(model.classify(null, -33).speaker, "them");
   });
 
+  test("both calibrated but no voiceprint: unknown, not a loudness guess", () => {
+    const model = calibrated(ALEX, KIM);
+    assert.equal(model.classify(null, -20).speaker, "unknown");
+  });
+
+  test("a line cut to its words keeps its quieter speech when the room's noise level is known", () => {
+    // No pauses at all, alternating louder and quieter stretches, like speech cut tight to
+    // its words: on its own, its quietest frames look like the noise floor.
+    let seed = 7;
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) - 0.5;
+    const pcm = Buffer.alloc(3 * SAMPLE_RATE * 2);
+    for (let i = 0; i < pcm.length / 2; i++) {
+      const louder = Math.floor(i / 1600) % 2 === 0; // 100 ms stretches
+      pcm.writeInt16LE(Math.round(random() * (louder ? 4000 : 1500)), i * 2);
+    }
+    const alone = voiceprint(pcm)?.seconds ?? 0;
+    const withRoom = voiceprint(pcm, -70)?.seconds ?? 0;
+    assert.ok(withRoom > 2.5, `with the room's level: ${withRoom}s of 3s`);
+    assert.ok(alone < 2, `alone: ${alone}s`);
+  });
+
   test("a calibration line with too little speech is rejected for the other person", () => {
     const model = new SpeakerModel();
     assert.equal(model.calibrate("them", voiceprint(speak(SAM, 0.3, 7)), -24), false);
