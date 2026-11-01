@@ -5,14 +5,14 @@
 import AVFoundation
 
 enum MicSource: String, CaseIterable, Identifiable {
-    /// AirPods do both: they listen and whisper (Bluetooth call mode).
+    /// Bluetooth headphones (AirPods, Sony, ...) do both: listen and whisper (call mode).
     case airpods
     /// The iPhone's own mic listens (better at hearing the other person);
-    /// AirPods only whisper, in high-quality mode.
+    /// headphones only whisper, in high-quality mode.
     case iphone
 
     var id: String { rawValue }
-    var label: String { self == .airpods ? "AirPods mic" : "iPhone mic" }
+    var label: String { self == .airpods ? "Headphones mic" : "iPhone mic" }
 }
 
 enum AudioPipelineError: LocalizedError {
@@ -115,15 +115,27 @@ final class AudioPipeline: @unchecked Sendable {
         let session = AVAudioSession.sharedInstance()
         switch micSource {
         case .airpods:
-            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
         case .iphone:
             try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP])
         }
         try session.setActive(true)
-        if micSource == .iphone,
-           let builtInMic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
-            try session.setPreferredInput(builtInMic)
+
+        // Picking the input also picks the output: choosing the headphones' mic
+        // pulls the whisper onto the headphones instead of the iPhone earpiece.
+        let wanted: AVAudioSession.Port = micSource == .airpods ? .bluetoothHFP : .builtInMic
+        if let input = session.availableInputs?.first(where: { $0.portType == wanted }) {
+            try session.setPreferredInput(input)
         }
+    }
+
+    /// Where audio is coming from and going to right now, e.g. "Mic: WH-1000XM5 · Voice: WH-1000XM5".
+    static func routeDescription() -> String {
+        let route = AVAudioSession.sharedInstance().currentRoute
+        let mic = route.inputs.first?.portName ?? "none"
+        guard let out = route.outputs.first else { return "Mic: \(mic) · Voice: none" }
+        let voice = out.portType == .builtInReceiver ? "iPhone earpiece ⚠️ connect headphones" : out.portName
+        return "Mic: \(mic) · Voice: \(voice)"
     }
 
     private func startEngine() throws {
