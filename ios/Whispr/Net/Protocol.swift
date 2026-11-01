@@ -18,6 +18,7 @@ enum ServerEvent {
     case risk(score: Double)
     case taskStarted(id: String, kind: String, label: String)
     case taskDone(id: String, kind: String, ok: Bool, imageUrl: String?, caption: String?, emailed: Bool?)
+    case calibrated(ok: Bool, levelDb: Double?)
     case error(message: String)
     case pong
 }
@@ -25,7 +26,7 @@ enum ServerEvent {
 extension ServerEvent: Decodable {
     private enum Key: String, CodingKey {
         case type, sessionId, integrations, id, text, final, speaker, sampleRate, score
-        case kind, label, ok, imageUrl, caption, emailed, message
+        case kind, label, ok, imageUrl, caption, emailed, message, levelDb
     }
 
     init(from decoder: Decoder) throws {
@@ -60,6 +61,9 @@ extension ServerEvent: Decodable {
                              imageUrl: try c.decodeIfPresent(String.self, forKey: .imageUrl),
                              caption: try c.decodeIfPresent(String.self, forKey: .caption),
                              emailed: try c.decodeIfPresent(Bool.self, forKey: .emailed))
+        case "calibrated":
+            self = .calibrated(ok: try c.decode(Bool.self, forKey: .ok),
+                               levelDb: try c.decodeIfPresent(Double.self, forKey: .levelDb))
         case "error":
             self = .error(message: try c.decode(String.self, forKey: .message))
         case "pong":
