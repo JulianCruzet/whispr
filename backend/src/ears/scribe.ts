@@ -39,7 +39,9 @@ const URL_PARAMS = new URLSearchParams({
   // Left to detect the language, Scribe turned short noises into Hindi and Japanese.
   language_code: "en",
   commit_strategy: "vad",
-  vad_silence_threshold_secs: "0.6",
+  // A quick handover between two people is often a shorter pause than 0.6 s, which
+  // merged both into one line. 0.4 s keeps most turns apart (checked: Scribe accepts it).
+  vad_silence_threshold_secs: "0.4",
   include_timestamps: "true",
 });
 

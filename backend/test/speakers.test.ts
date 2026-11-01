@@ -117,6 +117,23 @@ describe("splitting a line that holds both voices", () => {
     assert.ok(parts[0].text.startsWith("me0") && parts[1].text.includes("them"));
   });
 
+  test("a quick 'yeah' and then a long answer from the other person is split too", () => {
+    const model = calibrated(ALEX, SAM);
+    const audio = Buffer.concat([speak(ALEX, 1, 63), speak(SAM, 3, 64)]);
+    const printOf = (from: number, to: number) =>
+      voiceprint(audio.subarray(Math.floor(from * SAMPLE_RATE) * 2, Math.floor(to * SAMPLE_RATE) * 2));
+    const timed = (from: number, to: number, label: string): TimedWord[] =>
+      Array.from({ length: Math.floor((to - from) / 0.4) }, (_, i) => ({
+        text: `${label}${i}`,
+        start: from + i * 0.4,
+        end: Math.min(to, from + i * 0.4 + 0.35),
+      }));
+
+    const parts = splitBySpeaker([...timed(0, 1, "me"), ...timed(1, 4, "them")], printOf, model);
+    assert.deepEqual(parts?.map((p) => p.speaker), ["me", "them"]);
+    assert.ok(!parts![1].text.includes("me"));
+  });
+
   test("one voice throughout stays one turn", () => {
     const model = calibrated(ALEX, KIM);
     const audio = speak(ALEX, 4.8, 62);
