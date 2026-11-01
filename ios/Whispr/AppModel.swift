@@ -70,11 +70,13 @@ final class AppModel {
         client.onDisconnect = { [weak self] error in
             Task { @MainActor in
                 guard let self else { return }
+                // Keep the mic running: chunks are dropped while offline and flow again on reconnect.
                 self.connection = .disconnected
-                if self.listening { self.stopListening() }
                 if let error { self.lastError = error.localizedDescription }
+                self.scheduleReconnect()
             }
         }
+        startKeepalive()
     }
 
     func connect() {
@@ -84,6 +86,36 @@ final class AppModel {
         }
         connection = .connecting
         client.connect(to: url)
+    }
+
+    // MARK: Staying connected
+
+    private var reconnectAttempt = 0
+    private var reconnectPending = false
+
+    /// Retries with backoff (0.5 s, 1 s, 2 s, then every 4 s) until the backend answers.
+    private func scheduleReconnect() {
+        guard !reconnectPending else { return }
+        reconnectPending = true
+        let delay = min(4.0, 0.5 * pow(2.0, Double(reconnectAttempt)))
+        reconnectAttempt += 1
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self else { return }
+            self.reconnectPending = false
+            if self.connection == .disconnected { self.connect() }
+        }
+    }
+
+    /// Tunnels and hosts drop idle WebSockets; a ping every 20 s keeps it open between turns.
+    private func startKeepalive() {
+        Task { @MainActor [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(20))
+                guard let self else { return }
+                if self.connection == .connected { self.client.send(json: ["type": "ping"]) }
+            }
+        }
     }
 
     func toggleListening() {
@@ -134,6 +166,7 @@ final class AppModel {
         case .ready:
             // A new backend session hasn't heard the wearer's voice yet.
             connection = .connected
+            reconnectAttempt = 0
             calibration = .none
             lastError = nil
         case let .transcript(id, text, final, speaker):

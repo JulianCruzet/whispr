@@ -40,6 +40,7 @@ final class AudioPipeline: @unchecked Sendable {
     private var playbackCarry: UInt8?
     private var micSource: MicSource = .airpods
     private var configObserver: NSObjectProtocol?
+    private var interruptionObserver: NSObjectProtocol?
     private static let chunkBytes = 3200 // 100 ms at 16 kHz, 16-bit
 
     init() {
@@ -61,11 +62,26 @@ final class AudioPipeline: @unchecked Sendable {
             try? self.configureSession()
             try? self.startEngine()
         }
+
+        // A phone call, Siri or an alarm pauses our audio; pick up again when it's over.
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: .main
+        ) { [weak self] note in
+            guard let self,
+                  let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .ended
+            else { return }
+            try? self.configureSession()
+            try? self.startEngine()
+        }
     }
 
     func stop() {
-        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        for observer in [configObserver, interruptionObserver].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(observer)
+        }
         configObserver = nil
+        interruptionObserver = nil
         engine.inputNode.removeTap(onBus: 0)
         player.stop()
         engine.stop()
