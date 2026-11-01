@@ -1,18 +1,19 @@
 import SwiftUI
 
-/// Mission screen. Read at a glance mid-conversation: the line to say is the biggest thing on it.
+/// Mission screen. Read at a glance mid-conversation: the line to say is the biggest,
+/// darkest thing on it; everything else stays quiet.
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showSettings = false
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             header
-            cueCard
+            lineCard
             if model.listening {
                 CoverMeter(risk: model.risk)
-                calibrationBanner
+                calibration
             }
             transcript
             proof
@@ -21,8 +22,8 @@ struct ContentView: View {
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 12)
-        .background(PinstripeBackground())
-        .preferredColorScheme(.dark)
+        .background(Theme.paper.ignoresSafeArea())
+        .preferredColorScheme(.light)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .fullScreenCover(isPresented: .constant(model.showsFakeCallScreen)) { FakeCallView() }
         .overlay(alignment: .top) { panicCountdown }
@@ -32,33 +33,34 @@ struct ContentView: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Whispr")
-                    .font(Theme.display(34, relativeTo: .largeTitle))
-                    .foregroundStyle(Theme.chalk)
-                TicketText("Playing · \(model.persona.label)")
+                    .font(Theme.serif(.largeTitle))
+                    .foregroundStyle(Theme.graphite)
+                LabelText("Playing \(model.persona.label)")
             }
             Spacer()
-            ConnectionTag(connection: model.connection)
+            ConnectionPill(connection: model.connection)
             Button {
                 showSettings = true
             } label: {
                 Image(systemName: "slider.horizontal.3")
-                    .font(.title3)
-                    .foregroundStyle(Theme.brass)
-                    .frame(width: 44, height: 44)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Theme.graphite)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Theme.linen))
             }
             .accessibilityLabel("Settings")
         }
     }
 
-    // MARK: The lining: the line to say
+    // MARK: The line to say
 
-    private var cueCard: some View {
+    private var lineCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                WovenLabel(text: "In your ear")
+                LabelText("In your ear", color: Theme.cream.opacity(0.65))
                 Spacer()
                 if model.speaking {
                     VoiceBars(animated: !reduceMotion)
@@ -68,21 +70,21 @@ struct ContentView: View {
             Group {
                 if let whisper = model.currentWhisper {
                     Text(whisper)
-                        .font(Theme.display(29))
-                        .foregroundStyle(Theme.chalk)
+                        .font(Theme.serif(.title))
+                        .foregroundStyle(Theme.cream)
                         .id(whisper)
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
                 } else {
                     Text(model.listening ? "Listening. Your next line shows up here." : "Start listening when the conversation begins.")
-                        .font(Theme.displayItalic(22))
-                        .foregroundStyle(Theme.chalk.opacity(0.55))
+                        .font(Theme.serif(.title2))
+                        .foregroundStyle(Theme.cream.opacity(0.55))
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
             .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(22)
-        .background(LiningBackground())
+        .padding(24)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.bronze))
         .animation(.easeOut(duration: 0.35), value: model.currentWhisper)
         .animation(.easeOut(duration: 0.2), value: model.speaking)
         .accessibilityElement(children: .combine)
@@ -90,7 +92,7 @@ struct ContentView: View {
 
     // MARK: Calibration
 
-    @ViewBuilder private var calibrationBanner: some View {
+    @ViewBuilder private var calibration: some View {
         switch model.calibration {
         case .none, .failed:
             Button {
@@ -99,17 +101,17 @@ struct ContentView: View {
                 Label(model.calibration == .failed ? "Didn't catch that. Try again" : "Calibrate my voice",
                       systemImage: "person.wave.2")
             }
-            .buttonStyle(BrassButtonStyle(filled: false))
+            .buttonStyle(PillButtonStyle(kind: .quiet))
         case .listening:
             HStack(spacing: 10) {
                 Image(systemName: "waveform")
                 Text("Say one sentence in your normal voice")
             }
-            .font(.subheadline)
-            .foregroundStyle(Theme.brass)
+            .font(.body.weight(.medium))
+            .foregroundStyle(Theme.graphite)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(Capsule().fill(Theme.brass.opacity(0.12)))
+            .padding(.vertical, 15)
+            .background(Capsule().strokeBorder(Theme.stone, lineWidth: 1))
         case .done:
             EmptyView()
         }
@@ -120,18 +122,12 @@ struct ContentView: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(model.lines) { line in
                         TranscriptRow(line: line).id(line.id)
                     }
                     if !model.partial.isEmpty {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            TicketText("···").frame(width: 42, alignment: .leading)
-                            Text(model.partial)
-                                .italic()
-                                .foregroundStyle(Theme.smoke)
-                        }
-                        .id("partial")
+                        TranscriptRow.partial(model.partial).id("partial")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -147,33 +143,32 @@ struct ContentView: View {
 
     @ViewBuilder private var proof: some View {
         if !model.tasks.isEmpty || model.lastPhoto != nil {
-            HStack(alignment: .bottom, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
                 if let photo = model.lastPhoto {
                     Image(uiImage: photo)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 72, height: 96)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.brass.opacity(0.6), lineWidth: 1))
+                        .frame(width: 60, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .accessibilityLabel("Proof photo")
                 }
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     if let task = model.tasks.last {
-                        HStack(spacing: 6) {
-                            Image(systemName: task.done ? "checkmark" : "hourglass")
-                                .foregroundStyle(Theme.brass)
-                            Text(task.done ? "Photo found" : task.label)
-                                .foregroundStyle(Theme.chalk)
-                                .lineLimit(1)
-                        }
-                        .font(.subheadline)
+                        Text(task.done ? (model.lastPhoto == nil ? "No photo this time" : "Photo found") : task.label)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(Theme.graphite)
+                            .lineLimit(1)
                     }
                     if model.lastPhotoSaved {
-                        TicketText("Saved to Photos", color: Theme.brass)
+                        Label("Saved to Photos", systemImage: "checkmark")
+                            .font(Theme.label)
+                            .foregroundStyle(Theme.moss)
                     }
                 }
                 Spacer(minLength: 0)
             }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.stone, lineWidth: 1))
         }
     }
 
@@ -182,22 +177,22 @@ struct ContentView: View {
     private var controls: some View {
         VStack(spacing: 10) {
             if model.listening && !model.route.isEmpty {
-                TicketText(model.route)
+                LabelText(model.route)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button(model.listening ? "Stop" : "Start listening") { model.toggleListening() }
-                    .buttonStyle(BrassButtonStyle(filled: !model.listening))
+                    .buttonStyle(PillButtonStyle(kind: model.listening ? .secondary : .primary))
                     .disabled(model.connection != .connected)
                 // Works offline: the fake call needs no backend.
                 Button {
                     model.triggerPanic()
                 } label: {
-                    Label("Panic", systemImage: "phone.badge.waveform.fill")
+                    Label("Panic", systemImage: "phone.fill")
                 }
-                .buttonStyle(BrassButtonStyle(fill: Theme.alarm))
-                .frame(width: 132)
+                .buttonStyle(PillButtonStyle(kind: .alarm))
+                .frame(width: 128)
                 .disabled(model.panic != .idle)
             }
         }
@@ -212,9 +207,9 @@ struct ContentView: View {
                 Button("Cancel") { model.cancelPanic() }
                     .font(.headline)
             }
-            .foregroundStyle(Theme.chalk)
+            .foregroundStyle(Theme.paper)
             .padding(16)
-            .background(Theme.alarm, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(Capsule().fill(Theme.charcoal))
             .padding(.horizontal, 16)
         }
     }
@@ -222,8 +217,7 @@ struct ContentView: View {
 
 // MARK: - Pieces
 
-/// Connection state as a ticket: brass dot when live.
-private struct ConnectionTag: View {
+private struct ConnectionPill: View {
     let connection: AppModel.Connection
 
     var body: some View {
@@ -231,8 +225,13 @@ private struct ConnectionTag: View {
             Circle()
                 .fill(color)
                 .frame(width: 7, height: 7)
-            TicketText(label, color: color)
+            Text(label)
+                .font(Theme.label)
+                .foregroundStyle(Theme.graphite)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Theme.linen))
         .accessibilityElement(children: .combine)
     }
 
@@ -246,9 +245,9 @@ private struct ConnectionTag: View {
 
     private var color: Color {
         switch connection {
-        case .connected: Theme.brass
-        case .connecting: Theme.smoke
-        case .disconnected: Theme.alarm
+        case .connected: Theme.moss
+        case .connecting: Theme.pebble
+        case .disconnected: Theme.brick
         }
     }
 }
@@ -258,19 +257,23 @@ private struct CoverMeter: View {
     let risk: Double
 
     var body: some View {
-        HStack(spacing: 10) {
-            TicketText("Cover")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                LabelText("Cover")
+                Spacer()
+                Text(verdict)
+                    .font(Theme.label)
+                    .foregroundStyle(risk >= 0.67 ? Theme.brick : Theme.graphite)
+            }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.pinstripe)
+                    Capsule().fill(Theme.stone)
                     Capsule()
-                        .fill(LinearGradient(colors: [Theme.brass, Theme.alarm], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(6, geometry.size.width * min(max(risk, 0), 1)))
+                        .fill(risk >= 0.67 ? Theme.brick : Theme.graphite)
+                        .frame(width: max(4, geometry.size.width * min(max(risk, 0), 1)))
                 }
             }
-            .frame(height: 4)
-            TicketText(verdict, color: risk >= 0.67 ? Theme.alarm : Theme.smoke)
-                .frame(width: 48, alignment: .trailing)
+            .frame(height: 3)
         }
         .animation(.easeOut(duration: 0.4), value: risk)
         .accessibilityElement(children: .ignore)
@@ -286,7 +289,7 @@ private struct CoverMeter: View {
     }
 }
 
-/// Brass sound bars while Roxy is talking.
+/// Cream sound bars on the bronze panel while Roxy is talking.
 private struct VoiceBars: View {
     let animated: Bool
 
@@ -296,7 +299,7 @@ private struct VoiceBars: View {
             HStack(alignment: .center, spacing: 3) {
                 ForEach(0..<5) { i in
                     Capsule()
-                        .fill(Theme.brass)
+                        .fill(Theme.cream.opacity(0.85))
                         .frame(width: 3, height: animated ? 6 + 12 * abs(sin(t * 7 + Double(i) * 0.9)) : 10)
                 }
             }
@@ -306,24 +309,43 @@ private struct VoiceBars: View {
     }
 }
 
-/// One finished line. The other person's lines stand out; the wearer's are muted.
+/// One line of the conversation, separated by hairlines. Their lines read at full weight;
+/// the wearer's are muted.
 private struct TranscriptRow: View {
-    let line: TranscriptLine
+    let speaker: String
+    let text: String
+    let muted: Bool
+    var italic = false
 
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            TicketText(label, color: line.speaker == .them ? Theme.brass : Theme.smoke)
-                .frame(width: 42, alignment: .leading)
-            Text(line.text)
-                .foregroundStyle(line.speaker == .me ? Theme.smoke : Theme.chalk)
+    init(line: TranscriptLine) {
+        switch line.speaker {
+        case .me: speaker = "You"
+        case .them: speaker = "Them"
+        case .unknown: speaker = "—"
         }
+        text = line.text
+        muted = line.speaker == .me
     }
 
-    private var label: String {
-        switch line.speaker {
-        case .me: "You"
-        case .them: "Them"
-        case .unknown: "—"
+    private init(partial: String) {
+        speaker = ""
+        text = partial
+        muted = true
+        italic = true
+    }
+
+    static func partial(_ text: String) -> TranscriptRow { TranscriptRow(partial: text) }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            LabelText(speaker)
+                .frame(width: 40, alignment: .leading)
+            Text(text)
+                .italic(italic)
+                .foregroundStyle(muted ? Theme.pebble : Theme.graphite)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.stone).frame(height: 0.5) }
     }
 }

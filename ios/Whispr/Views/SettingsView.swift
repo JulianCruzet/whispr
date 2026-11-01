@@ -9,13 +9,6 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Group {
-                    Section("Backend") {
-                        TextField("ws://<laptop-ip>:8787/ws", text: $model.backendURL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.URL)
-                        Button("Reconnect") { model.connect() }
-                    }
                     Section {
                         Picker("Playing", selection: $model.persona) {
                             ForEach(Persona.allCases) { Text($0.label).tag($0) }
@@ -32,7 +25,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Microphone")
                     } footer: {
-                        Text("If your headphones can't hear the other person, switch to the iPhone mic. Whispers still play in your headphones.")
+                        Text("If your headphones don't pick up the other person, use the iPhone mic. Roxy still talks in your headphones.")
                     }
                     Section {
                         TextField("Caller name", text: $model.panicCallerName)
@@ -45,29 +38,46 @@ struct SettingsView: View {
                     } header: {
                         Text("Panic button")
                     } footer: {
-                        Text("Panic fakes an incoming call so you can walk away. Listening pauses during the call. The iOS call screen looks real when the phone is locked or pocketed (use a delay), but shows as a banner while you're in the app.")
+                        Text("Panic fakes an incoming call so you can walk away. Listening pauses until you hang up. The iOS call screen looks real on a locked phone, but shows as a banner while Whispr is open.")
                     }
-                    Section("Test") {
-                        Button("Fake: \"Wait, you saw Laufey live?\"") {
+                    Section {
+                        Button("They say: \"Wait, you saw Laufey live?\"") {
                             model.sendTestLine("Wait, you saw Laufey live? Which show?")
                         }
-                        Button("Fake: \"Who's your favourite artist?\"") {
+                        Button("They say: \"Who's your favourite artist?\"") {
                             model.sendTestLine("Who's your favourite artist right now?")
                         }
+                    } header: {
+                        Text("Practice")
+                    } footer: {
+                        Text("Sends their line without anyone speaking. Use it to check the voice, or if the mic struggles during a demo.")
+                    }
+                    Section {
+                        TextField("wss://<host>/ws", text: $model.backendURL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                        Button("Reconnect") { model.connect() }
+                    } header: {
+                        Text("Server")
                     }
                     if let error = model.lastError {
-                        Section("Last error") { Text(error).foregroundStyle(.red) }
+                        Section("Last error") {
+                            Text(error).foregroundStyle(Theme.brick)
+                        }
                     }
                 }
-                .listRowBackground(Theme.pinstripe.opacity(0.75))
+                .listRowBackground(Color.white)
             }
             .scrollContentBackground(.hidden)
-            .background(PinstripeBackground())
+            .background(Theme.linen.ignoresSafeArea())
             .navigationTitle("Settings")
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar { Button("Done") { dismiss() } }
+            .toolbar {
+                Button("Done") { dismiss() }
+                    .fontWeight(.semibold)
+            }
         }
-        .tint(Theme.brass)
-        .preferredColorScheme(.dark)
+        .tint(Theme.graphite)
+        .preferredColorScheme(.light)
     }
 }

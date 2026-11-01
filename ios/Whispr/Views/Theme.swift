@@ -1,40 +1,43 @@
-// FACE: the "Savile Row" look. Whispr is the voice in a Kingsman's earpiece, so the
-// app dresses like the tailor shop out front: worsted navy with a chalk pinstripe,
-// brass fittings, and an oxblood silk lining for the line you're about to say.
+// FACE: a calm, editorial look in the spirit of Wealthsimple: warm paper canvas,
+// graphite type, a serif for the things that matter, black pill buttons, hairlines
+// instead of shadows. The line to say sits on a dark bronze panel, the one dark
+// object on the screen, so it's the first thing the eye lands on.
 
 import SwiftUI
 
 enum Theme {
     // MARK: Colour
 
-    /// Worsted navy: the cloth. Background.
-    static let worsted = Color(hex: 0x0F1626)
-    /// Pinstripe: hairlines and quiet surfaces.
-    static let pinstripe = Color(hex: 0x1F2839)
-    /// Chalk: primary text.
-    static let chalk = Color(hex: 0xEDE8DF)
-    /// Smoke: secondary text, the wearer's own lines.
-    static let smoke = Color(hex: 0x8F98A9)
-    /// Brass: buttons, buckles, anything you can act on.
-    static let brass = Color(hex: 0xC9A55C)
-    /// Oxblood: the lining (the whisper card) and Panic.
-    static let oxblood = Color(hex: 0x6B1C27)
-    static let oxbloodDeep = Color(hex: 0x45111A)
-    static let alarm = Color(hex: 0xA8323F)
+    /// Page canvas.
+    static let paper = Color(hex: 0xFCFCFC)
+    /// Warm wash for quiet surfaces (pills, the calibrate button).
+    static let linen = Color(hex: 0xF4F1EC)
+    /// Hairline borders and dividers.
+    static let stone = Color(hex: 0xE4E2E1)
+    /// Primary text.
+    static let graphite = Color(hex: 0x32302F)
+    /// Secondary text and the wearer's own lines.
+    static let pebble = Color(hex: 0x686664)
+    /// Primary buttons.
+    static let charcoal = Color(hex: 0x09090A)
+    /// The panel for the line to say.
+    static let bronze = Color(hex: 0x3A3525)
+    /// Text on the bronze panel.
+    static let cream = Color(hex: 0xF6F1E7)
+    /// Panic and warnings: the only strong colour, kept for the escape hatch.
+    static let brick = Color(hex: 0xA33A2B)
+    /// "Live" and "saved" confirmations.
+    static let moss = Color(hex: 0x3E7A52)
 
     // MARK: Type
 
-    /// Didot, the fashion-house serif: the whispered line and the wordmark.
-    static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("Didot", size: size, relativeTo: style)
+    /// Editorial serif (iOS's New York) for the wordmark and the line to say.
+    static func serif(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
+        .system(style, design: .serif).weight(weight)
     }
 
-    static func displayItalic(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("Didot-Italic", size: size, relativeTo: style)
-    }
-
-    /// Small monospaced caps for labels, status and data, like a tailor's ticket.
-    static let ticket = Font.system(.caption2, design: .monospaced).weight(.semibold)
+    /// Small UI labels: sentence case with a touch of tracking.
+    static let label = Font.footnote.weight(.medium)
 }
 
 extension Color {
@@ -47,107 +50,64 @@ extension Color {
     }
 }
 
-/// Ticket-style label: monospaced caps with a little tracking.
-struct TicketText: View {
+/// A small sentence-case label.
+struct LabelText: View {
     let text: String
-    var color: Color = Theme.smoke
+    var color: Color = Theme.pebble
 
-    init(_ text: String, color: Color = Theme.smoke) {
+    init(_ text: String, color: Color = Theme.pebble) {
         self.text = text
         self.color = color
     }
 
     var body: some View {
-        Text(text.uppercased())
-            .font(Theme.ticket)
-            .tracking(1.4)
+        Text(text)
+            .font(Theme.label)
+            .tracking(0.2)
             .foregroundStyle(color)
     }
 }
 
-/// Worsted navy with a faint chalk pinstripe, edge to edge.
-struct PinstripeBackground: View {
-    var body: some View {
-        Theme.worsted
-            .overlay {
-                Canvas { context, size in
-                    let spacing: CGFloat = 14
-                    var x: CGFloat = spacing / 2
-                    while x < size.width {
-                        context.fill(
-                            Path(CGRect(x: x, y: 0, width: 0.6, height: size.height)),
-                            with: .color(Theme.chalk.opacity(0.045))
-                        )
-                        x += spacing
-                    }
-                }
-            }
-            .ignoresSafeArea()
-            .accessibilityHidden(true)
-    }
-}
-
-/// The jacket lining: oxblood silk with a brass running stitch just inside the edge.
-struct LiningBackground: View {
-    var cornerRadius: CGFloat = 18
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(LinearGradient(colors: [Theme.oxblood, Theme.oxbloodDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius - 6, style: .continuous)
-                    .inset(by: 7)
-                    .stroke(Theme.brass.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            }
-    }
-}
-
-/// The woven label sewn into the lining.
-struct WovenLabel: View {
-    let text: String
-
-    var body: some View {
-        TicketText(text, color: Theme.brass)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Theme.worsted, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).stroke(Theme.brass.opacity(0.4), lineWidth: 0.5))
-    }
-}
-
-/// Brass capsule for the main action; outline variant for secondary ones.
-struct BrassButtonStyle: ButtonStyle {
-    var filled = true
-    var fill: Color = Theme.brass
+/// Pill buttons: filled charcoal (primary), outlined (secondary), linen (quiet), or a custom fill.
+struct PillButtonStyle: ButtonStyle {
+    enum Kind { case primary, secondary, quiet, alarm }
+    var kind: Kind = .primary
 
     func makeBody(configuration: Configuration) -> some View {
-        BrassButtonBody(configuration: configuration, filled: filled, fill: fill)
+        PillButtonBody(configuration: configuration, kind: kind)
     }
 }
 
-private struct BrassButtonBody: View {
+private struct PillButtonBody: View {
     let configuration: ButtonStyleConfiguration
-    let filled: Bool
-    let fill: Color
+    let kind: PillButtonStyle.Kind
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         configuration.label
-            .font(.headline)
+            .font(.body.weight(.medium))
+            .tracking(0.3)
             .lineLimit(1)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 15)
             .frame(maxWidth: .infinity)
-            .foregroundStyle(filled ? (fill == Theme.brass ? Theme.worsted : Theme.chalk) : Theme.brass)
+            .foregroundStyle(foreground)
             .background {
-                if filled {
-                    Capsule().fill(fill)
-                } else {
-                    Capsule().stroke(Theme.brass.opacity(0.7), lineWidth: 1)
+                switch kind {
+                case .primary: Capsule().fill(Theme.charcoal)
+                case .alarm: Capsule().fill(Theme.brick)
+                case .quiet: Capsule().fill(Theme.linen)
+                case .secondary: Capsule().strokeBorder(Theme.graphite, lineWidth: 1)
                 }
             }
-            .opacity(!isEnabled ? 0.35 : configuration.isPressed ? 0.75 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(!isEnabled ? 0.35 : configuration.isPressed ? 0.7 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .primary, .alarm: Theme.paper
+        case .secondary, .quiet: Theme.graphite
+        }
     }
 }
