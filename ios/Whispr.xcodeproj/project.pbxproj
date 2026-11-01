@@ -9,10 +9,12 @@
 /* Begin PBXBuildFile section */
 		10328D3D721577D4A02DC5AC /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F536EF866E825A2FB88E15AB /* AudioPipeline.swift */; };
 		145E2758C7E5336AF753F841 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28CC77D1C103788D77193BB /* BackendClient.swift */; };
+		2963057069F25B9734F7F744 /* FakeCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ABB3999F6496CAE198D5F49 /* FakeCallView.swift */; };
 		4AF99213F98672AD1647F28C /* PhotoSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24C07F7FD888884269C7AE8 /* PhotoSaver.swift */; };
 		526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCBD08640207C29B74FD832 /* SettingsView.swift */; };
 		71636C8764F8756C8941BC22 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE242502FC8B525741E68987 /* ContentView.swift */; };
 		9B87B3EC6C5649F3C07E8D82 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0598B5F96738C8C3AB0E399E /* AppModel.swift */; };
+		B30BA746E2BF2F7E96C2A6AD /* FakeCallKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 668F4D5F3970A647EA69EF5E /* FakeCallKit.swift */; };
 		B5C7730C67C341FBA1B68303 /* Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B08BA3C43722A9D711D2D2D /* Protocol.swift */; };
 		C6EE94F9CDEE6E78502C19A5 /* WhisprApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B184F395489DB9EBBE4591D2 /* WhisprApp.swift */; };
 /* End PBXBuildFile section */
@@ -21,6 +23,8 @@
 		0598B5F96738C8C3AB0E399E /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		209959725DFF9E07930E5813 /* Whispr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Whispr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B08BA3C43722A9D711D2D2D /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protocol.swift; sourceTree = "<group>"; };
+		668F4D5F3970A647EA69EF5E /* FakeCallKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeCallKit.swift; sourceTree = "<group>"; };
+		9ABB3999F6496CAE198D5F49 /* FakeCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeCallView.swift; sourceTree = "<group>"; };
 		ADCBD08640207C29B74FD832 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B184F395489DB9EBBE4591D2 /* WhisprApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisprApp.swift; sourceTree = "<group>"; };
 		CE242502FC8B525741E68987 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -37,6 +41,15 @@
 				FBDABBD6156DC2A025CF92FC /* Whispr */,
 				96230CA5A2FC481FB0F28D46 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		4928749C6AAA7F25D1B016E1 /* Panic */ = {
+			isa = PBXGroup;
+			children = (
+				668F4D5F3970A647EA69EF5E /* FakeCallKit.swift */,
+				9ABB3999F6496CAE198D5F49 /* FakeCallView.swift */,
+			);
+			path = Panic;
 			sourceTree = "<group>";
 		};
 		852B256F4D2175EC50A17DA5 /* Audio */ = {
@@ -82,6 +95,7 @@
 				B184F395489DB9EBBE4591D2 /* WhisprApp.swift */,
 				852B256F4D2175EC50A17DA5 /* Audio */,
 				F2534694EFA040633D5A637F /* Net */,
+				4928749C6AAA7F25D1B016E1 /* Panic */,
 				F5E72131B2E609C006B3E68B /* Views */,
 			);
 			path = Whispr;
@@ -150,6 +164,8 @@
 				10328D3D721577D4A02DC5AC /* AudioPipeline.swift in Sources */,
 				145E2758C7E5336AF753F841 /* BackendClient.swift in Sources */,
 				71636C8764F8756C8941BC22 /* ContentView.swift in Sources */,
+				B30BA746E2BF2F7E96C2A6AD /* FakeCallKit.swift in Sources */,
+				2963057069F25B9734F7F744 /* FakeCallView.swift in Sources */,
 				4AF99213F98672AD1647F28C /* PhotoSaver.swift in Sources */,
 				B5C7730C67C341FBA1B68303 /* Protocol.swift in Sources */,
 				526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */,

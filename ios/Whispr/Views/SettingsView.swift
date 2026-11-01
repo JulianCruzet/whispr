@@ -24,6 +24,19 @@ struct SettingsView: View {
                 } footer: {
                     Text("If your headphones can't hear the other person, switch to the iPhone mic. Whispers still play in your headphones.")
                 }
+                Section {
+                    TextField("Caller name", text: $model.panicCallerName)
+                    Picker("Rings after", selection: $model.panicDelaySeconds) {
+                        Text("Right away").tag(0)
+                        Text("5 seconds").tag(5)
+                        Text("10 seconds").tag(10)
+                    }
+                    Toggle("Use the iOS call screen", isOn: $model.panicUsesCallKit)
+                } header: {
+                    Text("Panic button")
+                } footer: {
+                    Text("Panic fakes an incoming call so you can walk away. Listening pauses during the call. The iOS call screen looks real when the phone is locked or pocketed (use a delay), but shows as a banner while you're in the app.")
+                }
                 Section("Test") {
                     Button("Fake: \"Wait, you saw Laufey live?\"") {
                         model.sendTestLine("Wait, you saw Laufey live? Which show?")

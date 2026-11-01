@@ -23,6 +23,8 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .fullScreenCover(isPresented: .constant(model.showsFakeCallScreen)) { FakeCallView() }
+            .overlay(alignment: .top) { panicCountdown }
             .onAppear { if model.connection == .disconnected { model.connect() } }
         }
     }
@@ -97,10 +99,37 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Button(model.listening ? "Stop" : "Start listening") { model.toggleListening() }
+            HStack(spacing: 12) {
+                Button(model.listening ? "Stop" : "Start listening") { model.toggleListening() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(model.connection != .connected)
+                // Works offline: the fake call needs no backend.
+                Button {
+                    model.triggerPanic()
+                } label: {
+                    Label("Panic", systemImage: "phone.badge.waveform.fill")
+                }
                 .buttonStyle(.borderedProminent)
+                .tint(.red)
                 .controlSize(.large)
-                .disabled(model.connection != .connected)
+                .disabled(model.panic != .idle)
+            }
+        }
+    }
+
+    @ViewBuilder private var panicCountdown: some View {
+        if case let .countdown(secondsLeft) = model.panic {
+            HStack {
+                Text("\(model.panicCallerName) calls in \(secondsLeft)…")
+                    .font(.headline.monospacedDigit())
+                Spacer()
+                Button("Cancel") { model.cancelPanic() }
+            }
+            .padding()
+            .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 14))
+            .foregroundStyle(.white)
+            .padding(.horizontal)
         }
     }
 

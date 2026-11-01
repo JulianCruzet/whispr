@@ -1,3 +1,4 @@
+import AudioToolbox
 import AVFoundation
 import Foundation
 import Observation
@@ -39,6 +40,36 @@ final class AppModel {
 
     var lastPhoto: UIImage?
 
+    // MARK: Panic button state
+
+    enum Panic: Equatable {
+        case idle
+        /// Counting down before the call rings (time to pocket or lock the phone).
+        case countdown(secondsLeft: Int)
+        case ringing
+        case inCall(since: Date)
+    }
+    var panic: Panic = .idle
+
+    var panicCallerName: String {
+        didSet { UserDefaults.standard.set(panicCallerName, forKey: "panicCallerName") }
+    }
+    /// Real iOS call screen (CallKit). Off: our own full-screen call screen, which always shows full screen.
+    var panicUsesCallKit: Bool {
+        didSet { UserDefaults.standard.set(panicUsesCallKit, forKey: "panicUsesCallKit") }
+    }
+    var panicDelaySeconds: Int {
+        didSet { UserDefaults.standard.set(panicDelaySeconds, forKey: "panicDelaySeconds") }
+    }
+
+    /// Our own call screen is up (CallKit draws its own).
+    var showsFakeCallScreen: Bool {
+        switch panic {
+        case .ringing, .inCall: !panicUsesCallKit
+        case .idle, .countdown: false
+        }
+    }
+
     var backendURL: String {
         didSet { UserDefaults.standard.set(backendURL, forKey: "backendURL") }
     }
@@ -52,12 +83,21 @@ final class AppModel {
 
     private let client = BackendClient()
     private let audio = AudioPipeline()
+    private let callKit = FakeCallKit()
+    private var panicTask: Task<Void, Never>?
+    private var vibrationTask: Task<Void, Never>?
+    private var resumeListeningAfterPanic = false
 
     init() {
         backendURL = UserDefaults.standard.string(forKey: "backendURL")
             ?? Bundle.main.object(forInfoDictionaryKey: "WhisprBackendURL") as? String
             ?? "ws://localhost:8787/ws"
         micSource = MicSource(rawValue: UserDefaults.standard.string(forKey: "micSource") ?? "") ?? .airpods
+        panicCallerName = UserDefaults.standard.string(forKey: "panicCallerName") ?? "Mom"
+        panicUsesCallKit = UserDefaults.standard.bool(forKey: "panicUsesCallKit")
+        panicDelaySeconds = UserDefaults.standard.object(forKey: "panicDelaySeconds") as? Int ?? 0
+
+        callKit.onEnded = { [weak self] in Task { @MainActor in self?.endFakeCall() } }
 
         let client = client
         audio.onMicChunk = { chunk in client.send(audio: chunk) }
@@ -148,6 +188,80 @@ final class AppModel {
     private func restartListening() async {
         stopListening()
         await startListening()
+    }
+
+    // MARK: Panic button
+
+    /// Escape hatch: a fake incoming call so the wearer can "take this" and walk away.
+    /// Listening pauses while the call is up and resumes when it ends.
+    func triggerPanic() {
+        guard panic == .idle else { return }
+        panicTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var left = self.panicDelaySeconds
+            while left > 0 {
+                self.panic = .countdown(secondsLeft: left)
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+                left -= 1
+            }
+            self.ring()
+        }
+    }
+
+    func cancelPanic() {
+        panicTask?.cancel()
+        panicTask = nil
+        if case .countdown = panic { panic = .idle }
+    }
+
+    private func ring() {
+        resumeListeningAfterPanic = listening
+        if listening { stopListening() }
+        panic = .ringing
+        if panicUsesCallKit {
+            callKit.ring(from: panicCallerName) { [weak self] error in
+                guard let self, let error else { return }
+                // CallKit refused (e.g. Do Not Disturb): fall back to our own screen.
+                self.lastError = "iOS call screen unavailable (\(error.localizedDescription)); using the built-in one."
+                self.panicUsesCallKit = false
+                self.startVibrating()
+            }
+        } else {
+            startVibrating()
+        }
+    }
+
+    func answerFakeCall() {
+        stopVibrating()
+        panic = .inCall(since: .now)
+    }
+
+    func endFakeCall() {
+        guard panic != .idle else { return }
+        stopVibrating()
+        callKit.hangUp()
+        panic = .idle
+        if resumeListeningAfterPanic {
+            resumeListeningAfterPanic = false
+            Task { await startListening() }
+        }
+    }
+
+    /// Buzzes like an incoming call (works on silent too).
+    private func startVibrating() {
+        vibrationTask?.cancel()
+        vibrationTask = Task { @MainActor in
+            while !Task.isCancelled {
+                AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+                try? await Task.sleep(for: .seconds(1.4))
+            }
+        }
+    }
+
+    private func stopVibrating() {
+        vibrationTask?.cancel()
+        vibrationTask = nil
     }
 
     /// The next sentence the wearer says teaches the backend how loud their own voice is.
