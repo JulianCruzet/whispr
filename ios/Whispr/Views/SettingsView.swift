@@ -20,6 +20,21 @@ struct SettingsView: View {
                         Text("Who Whispr coaches you to be. Changing it starts a new scene.")
                     }
                     Section {
+                        Button("Calibrate my voice · 15 s") {
+                            model.calibrateForDemo(.me)
+                            dismiss()
+                        }
+                        Button("Calibrate their voice · 15 s") {
+                            model.calibrateForDemo(.them)
+                            dismiss()
+                        }
+                    } header: {
+                        Text("Voices for the demo")
+                    } footer: {
+                        Text("15 seconds of each of you talking normally, so Whispr knows exactly who is who. Do yours first; the main screen shows how far along it is.")
+                    }
+                    .disabled(model.connection != .connected)
+                    Section {
                         Picker("Listen with", selection: $model.micSource) {
                             ForEach(MicSource.allCases) { Text($0.label).tag($0) }
                         }

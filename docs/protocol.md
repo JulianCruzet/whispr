@@ -9,7 +9,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | binary | Mic audio: PCM signed 16-bit little-endian, mono, **16 kHz**, ~100 ms per frame |
 | text | `{"type":"hello","device":"iphone","sampleRate":16000,"deviceId":"..."}` on connect. `deviceId` (stable per phone) lets a reconnecting phone keep its voice calibration |
 | text | `{"type":"debug_turn","text":"...","speaker":"them"}`: pretend someone said `text` (skips speech-to-text). Testing and demo fallback |
-| text | `{"type":"calibrate","who":"me"}` or `"who":"them"`: the next lines spoken are that person's; the backend listens across up to 4 lines until it has ~4 s of the wearer's speech or ~3 s of the other person's, and takes a voice sample. `who` defaults to `me` |
+| text | `{"type":"calibrate","who":"me"}` or `"who":"them"`: the next lines spoken are that person's; the backend listens across up to 4 lines until it has ~4 s of the wearer's speech or ~3 s of the other person's, and takes a voice sample. `who` defaults to `me`. `"seconds":15` asks for a longer sample (up to 30 s; the app's Settings uses 15 for a demo) |
 | text | `{"type":"set_persona","persona":"first_date"}`: who the wearer is playing: `fan` (default), `interview`, `first_date` or `car_salesman`. Send it on every `ready` and when it changes. Changing it clears the conversation so far |
 | text | `{"type":"ping"}` |
 

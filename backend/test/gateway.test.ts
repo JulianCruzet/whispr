@@ -420,6 +420,19 @@ describe("calibration", () => {
     assert.equal(placed("which song?"), "them");
   });
 
+  test("a long calibration (15 s, for a demo) keeps listening across many lines", async () => {
+    brain.reply = () => [];
+    const { phone, session } = voiceSession();
+    phone.say({ type: "calibrate", who: "me", seconds: 15 });
+    for (let i = 0; i < 4; i++) speakInto(session, `line ${i}`, speak(ALEX, 4.2, 60 + i));
+    assert.equal(phone.events("calibrated").length, 0, "~13 s isn't 15 s yet");
+    speakInto(session, "and one more", speak(ALEX, 4.2, 64));
+    const progress = phone.events("calibrating");
+    assert.equal(progress.at(-1).target, 15);
+    assert.ok(progress.at(-1).seconds >= 15);
+    assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", who: "me", ok: true });
+  });
+
   test("gives up after 4 lines without enough speech", async () => {
     const { phone, session } = voiceSession();
     phone.say({ type: "calibrate", who: "them" });

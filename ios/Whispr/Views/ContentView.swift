@@ -101,7 +101,7 @@ struct ContentView: View {
         switch model.calibration {
         case .none:
             Button {
-                model.calibrate(.me)
+                model.calibrate(.me, length: .quick)
             } label: {
                 Label("Calibrate voices", systemImage: "person.2.wave.2")
             }
@@ -129,7 +129,9 @@ struct ContentView: View {
         case let .sampling(who, heard, target):
             CalibrationPrompt(
                 step: who == .me ? "1/2" : "2/2",
-                text: who == .me ? "Talk for a few seconds in your normal voice" : "Get them talking for a few seconds",
+                text: model.calibrationLength == .demo
+                    ? (who == .me ? "Talk for 15 seconds in your normal voice" : "Get them talking for 15 seconds")
+                    : (who == .me ? "Talk for a few seconds in your normal voice" : "Get them talking for a few seconds"),
                 heard: heard,
                 target: target
             )
