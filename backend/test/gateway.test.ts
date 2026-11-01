@@ -298,6 +298,25 @@ describe("strict turn-taking", () => {
     assert.deepEqual(phone.events("turn").map((t) => t.next), ["me", "them", "me", "them", "me", "them"]);
   });
 
+  test("quiet background talk and filler sounds don't use up a turn", async () => {
+    brain.reply = () => [];
+    const { phone, session } = voiceSession();
+    phone.say({ type: "set_turns", alternate: true });
+    speakInto(session, "my line", speak(ALEX, 2, 120));
+    speakInto(session, "their line", speak(KIM, 2, 121));
+    speakInto(session, "someone across the room", speak(KIM, 2, 122, -45));
+    speakInto(session, "Mm. Hmm.", speak(ALEX, 0.6, 123));
+    speakInto(session, "my reply", speak(ALEX, 2, 124));
+    assert.deepEqual(
+      phone.events("transcript").map((t) => [t.text, t.speaker]),
+      [
+        ["my line", "me"],
+        ["their line", "them"],
+        ["my reply", "me"],
+      ],
+    );
+  });
+
   test("switching it off goes back to voices", async () => {
     brain.reply = () => [];
     const { phone, session } = voiceSession();
