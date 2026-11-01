@@ -33,6 +33,10 @@
 	<string>Whispr listens to your conversation so it can whisper what to say next.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Whispr saves proof photos to your library.</string>
+	<key>SupabasePublishableKey</key>
+	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
+	<key>SupabaseURL</key>
+	<string>$(SUPABASE_URL)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
