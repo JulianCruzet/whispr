@@ -56,6 +56,13 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        if let photo = model.lastPhoto {
+            Image(uiImage: photo)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
     }
 
     private var listenButton: some View {

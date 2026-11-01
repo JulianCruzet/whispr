@@ -11,6 +11,8 @@ export type TaskKind = "find_photo" | "look_up_fact";
 // Text frames: JSON, one of:
 export type ClientMessage =
   | { type: "hello"; device: string; sampleRate: number }
+  /** Pretend someone said `text` (skips Scribe). For testing and as a demo fallback. */
+  | { type: "debug_turn"; text: string; speaker?: Speaker }
   | { type: "ping" };
 
 // ---------- backend -> phone (and dashboards) ----------
