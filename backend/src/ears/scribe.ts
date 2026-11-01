@@ -35,17 +35,26 @@ const KEEP_CHUNKS = 900;
 const NOISE_FLOOR_CHUNKS = 300;
 /** Scribe sends the plain commit just before the timestamped one; wait briefly for the latter. */
 const TIMESTAMPS_GRACE_MS = 250;
-const URL_PARAMS = new URLSearchParams({
-  model_id: "scribe_v2_realtime",
-  audio_format: `pcm_${SAMPLE_RATE}`,
-  // Left to detect the language, Scribe turned short noises into Hindi and Japanese.
-  language_code: "en",
-  commit_strategy: "vad",
-  // A quick handover between two people is often a shorter pause than 0.6 s, which
-  // merged both into one line. 0.4 s keeps most turns apart (checked: Scribe accepts it).
-  vad_silence_threshold_secs: "0.4",
-  include_timestamps: "true",
-});
+/**
+ * Silence that ends a line. A quick handover between two people is often a shorter pause
+ * than 0.6 s, which merged both into one line; 0.4 s keeps most turns apart (checked:
+ * Scribe accepts it). Strict turn-taking uses the longer one, so a pause mid-sentence
+ * doesn't end the line and throw the order out.
+ */
+export const LINE_SILENCE_SECONDS = 0.4;
+export const TURN_SILENCE_SECONDS = 0.7;
+
+function urlParams(silenceSeconds: number) {
+  return new URLSearchParams({
+    model_id: "scribe_v2_realtime",
+    audio_format: `pcm_${SAMPLE_RATE}`,
+    // Left to detect the language, Scribe turned short noises into Hindi and Japanese.
+    language_code: "en",
+    commit_strategy: "vad",
+    vad_silence_threshold_secs: String(silenceSeconds),
+    include_timestamps: "true",
+  });
+}
 
 interface QueuedChunk {
   message: string;
@@ -78,6 +87,17 @@ export class ScribeSession extends EventEmitter {
   private sentSeconds = 0;
   /** Recent audio, positioned on Scribe's timeline. */
   private sent: SentChunk[] = [];
+
+  private silenceSeconds = LINE_SILENCE_SECONDS;
+
+  /** Changes the silence that ends a line; Scribe reconnects with it on the next audio. */
+  setLineSilence(seconds: number): void {
+    if (seconds === this.silenceSeconds) return;
+    this.silenceSeconds = seconds;
+    const ws = this.ws;
+    this.ws = null;
+    ws?.close();
+  }
 
   /** Feed raw PCM16 mono 16 kHz audio from the phone. */
   sendAudio(pcm: Buffer): void {
@@ -134,7 +154,7 @@ export class ScribeSession extends EventEmitter {
   }
 
   private connect() {
-    const ws = new WebSocket(`wss://api.elevenlabs.io/v1/speech-to-text/realtime?${URL_PARAMS}`, {
+    const ws = new WebSocket(`wss://api.elevenlabs.io/v1/speech-to-text/realtime?${urlParams(this.silenceSeconds)}`, {
       headers: { "xi-api-key": config.elevenlabs.apiKey },
     });
     this.ws = ws;

@@ -276,6 +276,39 @@ describe("photo-ready alert", () => {
   });
 });
 
+describe("strict turn-taking", () => {
+  test("lines alternate me, them, me whatever they sound like; flip swaps who's next", async () => {
+    brain.reply = () => [];
+    const { phone, session } = voiceSession();
+    phone.say({ type: "set_turns", alternate: true });
+    // All in the wearer's voice, to show the voice doesn't decide.
+    for (const text of ["turn one", "turn two", "turn three"]) speakInto(session, text, speak(ALEX, 2, 110));
+    phone.say({ type: "flip_turn" });
+    speakInto(session, "turn four", speak(ALEX, 2, 111));
+    assert.deepEqual(
+      phone.events("transcript").map((t) => [t.text, t.speaker]),
+      [
+        ["turn one", "me"],
+        ["turn two", "them"],
+        ["turn three", "me"],
+        // Them was next; the flip made it the wearer.
+        ["turn four", "me"],
+      ],
+    );
+    assert.deepEqual(phone.events("turn").map((t) => t.next), ["me", "them", "me", "them", "me", "them"]);
+  });
+
+  test("switching it off goes back to voices", async () => {
+    brain.reply = () => [];
+    const { phone, session } = voiceSession();
+    phone.say({ type: "set_turns", alternate: true });
+    phone.say({ type: "set_turns", alternate: false });
+    speakInto(session, "just a line", speak(ALEX, 2, 112));
+    assert.equal(phone.events("transcript")[0].speaker, "unknown");
+    assert.equal(phone.events("turn").at(-1).next, null);
+  });
+});
+
 describe("noise", () => {
   test("a line that's only noise tags is dropped; tags in a real line are stripped", async () => {
     brain.reply = () => [];

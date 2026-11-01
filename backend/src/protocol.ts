@@ -23,6 +23,10 @@ export type ClientMessage =
   | { type: "cancel_calibration" }
   /** Who the wearer is playing: fan, interview, first_date or car_salesman. Default: fan. */
   | { type: "set_persona"; persona: string }
+  /** Strict turn-taking for a rigged demo: the wearer first, then them, then the wearer... */
+  | { type: "set_turns"; alternate: boolean }
+  /** Turn-taking slipped: swap who is next. */
+  | { type: "flip_turn" }
   | { type: "ping" };
 
 // ---------- backend -> phone (and dashboards) ----------
@@ -52,4 +56,6 @@ export type ServerEvent =
   /** `reason` says why a sample was refused: too little speech, or "them" sounded like the wearer. */
   | { type: "calibrated"; who: "me" | "them"; ok: boolean; reason?: "too_short" | "sounds_like_you" }
   | { type: "error"; message: string }
+  /** With turn-taking on, who the next line will be labelled as (null when it's off). */
+  | { type: "turn"; next: "me" | "them" | null }
   | { type: "pong" };
