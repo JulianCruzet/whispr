@@ -84,10 +84,12 @@ final class AppModel {
         didSet { UserDefaults.standard.set(panicDelaySeconds, forKey: "panicDelaySeconds") }
     }
 
-    /// Our own call screen is up (CallKit draws its own).
+    /// Our own call screen is up. CallKit draws its own while ringing, but once answered
+    /// the call pill opens the app, so it has to land on the call.
     var showsFakeCallScreen: Bool {
         switch panic {
-        case .ringing, .inCall: !panicUsesCallKit
+        case .ringing: !panicUsesCallKit
+        case .inCall: true
         case .idle, .countdown: false
         }
     }
@@ -128,6 +130,7 @@ final class AppModel {
         panicUsesCallKit = UserDefaults.standard.bool(forKey: "panicUsesCallKit")
         panicDelaySeconds = UserDefaults.standard.object(forKey: "panicDelaySeconds") as? Int ?? 0
 
+        callKit.onAnswered = { [weak self] in Task { @MainActor in self?.answerFakeCall() } }
         callKit.onEnded = { [weak self] in Task { @MainActor in self?.endFakeCall() } }
 
         let client = client
