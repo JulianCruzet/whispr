@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		079B9B5B856BCC80DD074303 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66B570BC3C10B74DD04BF4A8 /* Theme.swift */; };
 		10328D3D721577D4A02DC5AC /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F536EF866E825A2FB88E15AB /* AudioPipeline.swift */; };
 		145E2758C7E5336AF753F841 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28CC77D1C103788D77193BB /* BackendClient.swift */; };
 		1EA90AA06C6F9B8DC13F05A8 /* Ringtone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CAF685C2396E1DE8D7917B /* Ringtone.swift */; };
@@ -14,6 +15,7 @@
 		4AF99213F98672AD1647F28C /* PhotoSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24C07F7FD888884269C7AE8 /* PhotoSaver.swift */; };
 		526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCBD08640207C29B74FD832 /* SettingsView.swift */; };
 		71636C8764F8756C8941BC22 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE242502FC8B525741E68987 /* ContentView.swift */; };
+		8C5C3AF7BD60451D15577202 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 806FAF182746B56615BE9168 /* Assets.xcassets */; };
 		9B87B3EC6C5649F3C07E8D82 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0598B5F96738C8C3AB0E399E /* AppModel.swift */; };
 		B30BA746E2BF2F7E96C2A6AD /* FakeCallKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 668F4D5F3970A647EA69EF5E /* FakeCallKit.swift */; };
 		B5C7730C67C341FBA1B68303 /* Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B08BA3C43722A9D711D2D2D /* Protocol.swift */; };
@@ -25,6 +27,8 @@
 		209959725DFF9E07930E5813 /* Whispr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Whispr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B08BA3C43722A9D711D2D2D /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protocol.swift; sourceTree = "<group>"; };
 		668F4D5F3970A647EA69EF5E /* FakeCallKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeCallKit.swift; sourceTree = "<group>"; };
+		66B570BC3C10B74DD04BF4A8 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		806FAF182746B56615BE9168 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		88CAF685C2396E1DE8D7917B /* Ringtone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ringtone.swift; sourceTree = "<group>"; };
 		9ABB3999F6496CAE198D5F49 /* FakeCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeCallView.swift; sourceTree = "<group>"; };
 		ADCBD08640207C29B74FD832 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -86,6 +90,7 @@
 			children = (
 				CE242502FC8B525741E68987 /* ContentView.swift */,
 				ADCBD08640207C29B74FD832 /* SettingsView.swift */,
+				66B570BC3C10B74DD04BF4A8 /* Theme.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -94,6 +99,7 @@
 			isa = PBXGroup;
 			children = (
 				0598B5F96738C8C3AB0E399E /* AppModel.swift */,
+				806FAF182746B56615BE9168 /* Assets.xcassets */,
 				F279AA67B8BFED73892EDB9A /* Info.plist */,
 				B184F395489DB9EBBE4591D2 /* WhisprApp.swift */,
 				852B256F4D2175EC50A17DA5 /* Audio */,
@@ -112,6 +118,7 @@
 			buildConfigurationList = 6AE4131F5A7E523C1757526F /* Build configuration list for PBXNativeTarget "Whispr" */;
 			buildPhases = (
 				5B22A3A4E9F8052F93DB5117 /* Sources */,
+				A4198517B1D6A3CAF6B8F3BD /* Resources */,
 			);
 			buildRules = (
 			);
@@ -158,6 +165,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		A4198517B1D6A3CAF6B8F3BD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8C5C3AF7BD60451D15577202 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		5B22A3A4E9F8052F93DB5117 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -173,6 +191,7 @@
 				B5C7730C67C341FBA1B68303 /* Protocol.swift in Sources */,
 				1EA90AA06C6F9B8DC13F05A8 /* Ringtone.swift in Sources */,
 				526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */,
+				079B9B5B856BCC80DD074303 /* Theme.swift in Sources */,
 				C6EE94F9CDEE6E78502C19A5 /* WhisprApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
