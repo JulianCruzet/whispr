@@ -23,7 +23,7 @@ How to get Whispr running for the judges, and what to do when something breaks o
    - **Listen with**: *Headphones mic*. Switch to *iPhone mic* if the headphones don't pick up the other person.
    - **Persona** (if the picker is in your build): *fan* for the Laufey demo.
    - **Panic button**: caller name and ring delay.
-3. **Start listening**, then check the line above the button says your headphones for both *Mic* and *Voice*. If it says *iPhone earpiece ⚠️*, reconnect the headphones.
+3. **Start listening**, then check the line above the button says your headphones for both *Mic* and *Voice*. If it says *iPhone earpiece ⚠️* or *Speaker*, reconnect the headphones.
 4. Tap **Calibrate my voice** and say one normal sentence. **Don't skip this.** Without it the app can mistake your lines for theirs and whisper at the wrong time.
 5. Smoke test: ⚙️ → Test → *Fake: "Wait, you saw Laufey live?"*. You should hear a whisper within about 2 s.
 
