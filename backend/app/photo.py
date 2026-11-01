@@ -26,7 +26,8 @@ PORTRAIT_RATIO = 1.15
 MIN_SHORT_SIDE = 400
 # Jev reads only text, so it ranks results by their title and source page; then Haiku,
 # which can see, looks at the top few. A photo it rejects is never sent.
-JEV_RANK_TIMEOUT_S = 2.0
+# Runs alongside the size checks, so it gets the same time they do.
+JEV_RANK_TIMEOUT_S = 1.5
 LOOK_COUNT = 3
 # Stock and press agencies: their photos are posed or shot from the press pit, never what
 # a fan took on their phone, and Haiku sometimes let one through (a Getty shot of Drake
