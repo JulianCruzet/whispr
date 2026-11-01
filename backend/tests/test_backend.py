@@ -16,7 +16,7 @@ from app.main import create_app
 from app.personas import PERSONAS
 from app.prompts import PHOTO_COMING_NOTE, photo_query_system, whisper_system
 from app.session import PHOTO_READY_WHISPER, Deps, Session
-from app.whisper import cap_words, write_whisper
+from app.whisper import cap_words, clean_line, write_whisper
 
 IMAGE_URL = "https://img.example/laufey.jpg"
 
@@ -636,3 +636,15 @@ def test_word_cap_doesnt_cut_a_number_at_its_decimal_point():
     line = "Say head gaskets are a myth, friend. Say this Outback has the 2.5 boxer that never blew once."
 
     assert cap_words(line) == "Say head gaskets are a myth, friend."
+
+
+@pytest.mark.parametrize(
+    "raw, cleaned",
+    [
+        ("Say: Your brother's not wrong", "Say Your brother's not wrong"),
+        ('Say: "Honestly, I once missed a deadline', "Say Honestly, I once missed a deadline"),
+        ("Say you caught her at Massey Hall", "Say you caught her at Massey Hall"),
+    ],
+)
+def test_clean_line_drops_the_colon_after_say(raw, cleaned):
+    assert clean_line(raw) == cleaned
