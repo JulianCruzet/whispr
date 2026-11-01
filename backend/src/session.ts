@@ -5,6 +5,7 @@ import type { WebSocket } from "ws";
 import { BrainLink, type BrainEvent } from "./brainLink.js";
 import { config } from "./config.js";
 import { ScribeSession } from "./ears/scribe.js";
+import { cacheImage } from "./media.js";
 import type { ClientMessage, ServerEvent, Speaker } from "./protocol.js";
 import { speak, TTS_SAMPLE_RATE } from "./voice/tts.js";
 
@@ -30,8 +31,17 @@ export class PhoneSession {
   private pendingLines: { id: string; text: string; speaker: Speaker }[] = [];
   /** Whispers are spoken one after another, never over each other. */
   private speech: Promise<void> = Promise.resolve();
+  /**
+   * Brain events are handled in order. A photo is downloaded before its task_done goes out,
+   * so the "photo's on your phone" whisper right behind it can't arrive before the photo.
+   */
+  private brainEvents: Promise<void> = Promise.resolve();
 
-  constructor(private ws: WebSocket) {
+  /** `publicBaseUrl` is how the phone reaches this gateway over HTTP, for /media photo links. */
+  constructor(
+    private ws: WebSocket,
+    private publicBaseUrl = `http://localhost:${config.port}`,
+  ) {
     this.scribe.on("partial", (text) =>
       this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" }),
     );
@@ -49,7 +59,9 @@ export class PhoneSession {
     });
     this.scribe.on("error", (message) => this.send({ type: "error", message }));
 
-    this.brain.on("event", (event) => this.onBrainEvent(event));
+    this.brain.on("event", (event) => {
+      this.brainEvents = this.brainEvents.then(() => this.onBrainEvent(event)).catch((err) => this.fail(err));
+    });
     this.brain.on("offline", (message) => {
       console.warn(message);
       this.send({ type: "error", message: "Brain offline. Is the Python service running?" });
@@ -70,6 +82,7 @@ export class PhoneSession {
       this.brain.close();
     });
 
+    console.log(`[${this.id.slice(0, 8)}] phone connected (photos via ${publicBaseUrl})`);
     this.send({
       type: "ready",
       sessionId: this.id,
@@ -104,7 +117,7 @@ export class PhoneSession {
     this.brain.sendTurn(text, speaker);
   }
 
-  private onBrainEvent(event: BrainEvent) {
+  private async onBrainEvent(event: BrainEvent) {
     switch (event.type) {
       case "transcript": {
         // The brain echoes each line with Jev's verdict on who said it.
@@ -130,16 +143,23 @@ export class PhoneSession {
           label: event.task === "find_photo" ? "Finding a photo…" : "Looking it up…",
         });
         return;
-      case "task_done":
+      case "task_done": {
+        // Serve the photo from here so the phone never hits a host that blocks it.
+        let imageUrl = event.image_url;
+        if (event.ok && imageUrl) {
+          const id = await cacheImage(imageUrl);
+          if (id) imageUrl = `${this.publicBaseUrl}/media/${id}`;
+        }
         this.send({
           type: "task_done",
           id: event.task_id,
           kind: event.task === "find_photo" ? "find_photo" : "look_up_fact",
           ok: event.ok,
-          imageUrl: event.image_url,
+          imageUrl,
           caption: event.title ?? event.query,
         });
         return;
+      }
       case "persona":
         console.log(`[${this.id.slice(0, 8)}] persona: ${event.persona}`);
         return;

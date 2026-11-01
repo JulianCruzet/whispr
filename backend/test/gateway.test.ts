@@ -6,6 +6,7 @@
 
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, test } from "node:test";
 import { WebSocketServer, type WebSocket as ServerSocket } from "ws";
@@ -69,14 +70,29 @@ async function until(check: () => boolean, ms = 3000) {
   }
 }
 
+/** Stands in for an image host: /photo.jpg is an image (after ?delay= ms), anything else 404s. */
+const PHOTO = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+let imageHost: Server;
+let imageBase = "";
+
 const brain = new FakeBrain();
 let PhoneSession: typeof import("../src/session.js").PhoneSession;
 let levelDb: typeof import("../src/ears/scribe.js").levelDb;
+let getImage: typeof import("../src/media.js").getImage;
 
 before(async () => {
+  imageHost = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://x");
+    if (url.pathname !== "/photo.jpg") return void res.writeHead(404).end();
+    setTimeout(() => res.writeHead(200, { "Content-Type": "image/jpeg" }).end(PHOTO), Number(url.searchParams.get("delay") ?? 0));
+  });
+  await new Promise<void>((resolve) => imageHost.listen(0, resolve));
+  imageBase = `http://localhost:${(imageHost.address() as AddressInfo).port}`;
+
   process.env.BRAIN_URL = await brain.start();
   ({ PhoneSession } = await import("../src/session.js"));
   ({ levelDb } = await import("../src/ears/scribe.js"));
+  ({ getImage } = await import("../src/media.js"));
 });
 
 const phones: FakePhone[] = [];
@@ -85,6 +101,7 @@ after(async () => {
   // Hanging up closes each session's brain link, so nothing keeps the process alive.
   for (const phone of phones) phone.emit("close");
   await brain.stop();
+  await new Promise((resolve) => imageHost.close(resolve));
 });
 
 function newSession() {
@@ -164,7 +181,7 @@ describe("bridge to the brain", () => {
         task_id: "t1",
         task: "find_photo",
         ok: true,
-        image_url: "https://example.com/p.jpg",
+        image_url: `${imageBase}/missing.jpg`,
         title: "Scotiabank Arena",
         query: "q",
         used_fallback: false,
@@ -181,7 +198,8 @@ describe("bridge to the brain", () => {
       id: "t1",
       kind: "find_photo",
       ok: true,
-      imageUrl: "https://example.com/p.jpg",
+      // The relay couldn't fetch it, so the phone gets the original address to try itself.
+      imageUrl: `${imageBase}/missing.jpg`,
       caption: "Scotiabank Arena",
     });
     assert.ok(phone.log.some((e) => typeof e === "string" && e.startsWith("<audio")));
@@ -209,3 +227,47 @@ describe("bridge to the brain", () => {
     ]);
   });
 });
+
+describe("photo relay", () => {
+  const photoDone = (imageUrl: string) => ({
+    type: "task_done",
+    task_id: "t1",
+    task: "find_photo",
+    ok: true,
+    image_url: imageUrl,
+    title: "Drake at Scotiabank Arena",
+  });
+
+  test("the phone gets the photo from the gateway's /media, not the original host", async () => {
+    brain.reply = () => [photoDone(`${imageBase}/photo.jpg`)];
+    const phone = new FakePhone();
+    phones.push(phone);
+    new PhoneSession(phone as never, "https://whispr.example");
+    phone.say({ type: "debug_turn", text: "I went to Drake's concert last night", speaker: "me" });
+    await until(() => phone.events("task_done").length === 1);
+
+    const { imageUrl } = phone.events("task_done")[0];
+    const match = /^https:\/\/whispr\.example\/media\/([0-9a-f-]{36})$/.exec(imageUrl);
+    assert.ok(match, `unexpected imageUrl ${imageUrl}`);
+    const image = getImage(match[1]);
+    assert.equal(image?.contentType, "image/jpeg");
+    assert.deepEqual(image?.body, PHOTO);
+  });
+
+  test("the photo-ready whisper never overtakes a photo that's still downloading", async () => {
+    brain.reply = () => [
+      photoDone(`${imageBase}/photo.jpg?delay=300`),
+      { type: "whisper", id: "ready", text: "Photo's on your phone.", reason: "task_done", cover_blown_risk: null },
+    ];
+    const { phone } = newSession();
+    phone.say({ type: "debug_turn", text: "prove it", speaker: "them" });
+    await until(() => phone.events("whisper").length === 1);
+
+    const order = phone.log.filter((e) => typeof e !== "string" && ["task_done", "whisper"].includes(e.type));
+    assert.deepEqual(
+      order.map((e) => (e as Record<string, any>).type),
+      ["task_done", "whisper"],
+    );
+  });
+});
+
