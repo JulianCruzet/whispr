@@ -26,8 +26,10 @@ final class Ringtone {
     }
 
     func stop() {
-        player?.stop()
-        player = nil
+        // Nothing to stop on CallKit calls, and iOS owns their audio session.
+        guard let player else { return }
+        player.stop()
+        self.player = nil
         let session = AVAudioSession.sharedInstance()
         try? session.overrideOutputAudioPort(.none)
         try? session.setActive(false, options: .notifyOthersOnDeactivation)

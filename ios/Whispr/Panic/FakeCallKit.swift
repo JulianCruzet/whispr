@@ -1,19 +1,26 @@
 // PANIC (owner: Julian + Claude)
 // Rings the phone with the real iOS incoming-call screen via CallKit. Nothing is
-// actually connected: answering just shows the system in-call screen until you hang up.
+// actually connected: answering just tells the app to show its own in-call screen,
+// which is what the system opens when the call pill is tapped.
 
 import CallKit
 import Foundation
 
 final class FakeCallKit: NSObject, CXProviderDelegate {
+    /// Called on the main queue when the fake call is answered.
+    var onAnswered: (() -> Void)?
     /// Called on the main queue when the fake call is declined or hung up.
     var onEnded: (() -> Void)?
 
     private let provider: CXProvider
     private var currentCall: UUID?
 
+    /// iOS labels the call "<this name> Audio", so this reads as "FaceTime Audio" rather than
+    /// "Whispr Audio". The initializer is deprecated; if iOS ignores it, it uses the app's name.
+    private static let callServiceName = "FaceTime"
+
     override init() {
-        let configuration = CXProviderConfiguration()
+        let configuration = CXProviderConfiguration(localizedName: Self.callServiceName)
         configuration.supportsVideo = false
         configuration.maximumCallsPerCallGroup = 1
         configuration.supportedHandleTypes = [.generic]
@@ -51,6 +58,7 @@ final class FakeCallKit: NSObject, CXProviderDelegate {
         // Pretend it connected.
         provider.reportOutgoingCall(with: action.callUUID, connectedAt: .now)
         action.fulfill()
+        onAnswered?()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
