@@ -16,7 +16,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Persona")
                     } footer: {
-                        Text("Who Roxy coaches you to be. Changing it starts a new scene.")
+                        Text("Who Whispr coaches you to be. Changing it starts a new scene.")
                     }
                     Section {
                         Picker("Listen with", selection: $model.micSource) {
@@ -25,7 +25,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Microphone")
                     } footer: {
-                        Text("If your headphones don't pick up the other person, use the iPhone mic. Roxy still talks in your headphones.")
+                        Text("If your headphones don't pick up the other person, use the iPhone mic. Whispr still talks in your headphones.")
                     }
                     Section {
                         TextField("Caller name", text: $model.panicCallerName)

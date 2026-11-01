@@ -25,23 +25,23 @@ You're bluffing being a Laufey fan with a *real* Laufey fan.
 | | What happens |
 |---|---|
 | **They ask** | "Wait, you saw her live? Which show?" |
-| **Your earpiece whispers** | *"Say the Scotiabank show. Say From The Start wrecked you, you were not okay."* |
+| **Your earpiece whispers** | *"Say you saw her at Massey Hall. Say the Bewitched tour was unreal"* |
 | **They want proof** | "Do you have any pictures from that night?" |
-| **Your earpiece buys time** | *"Say hang on, let me find it."* An agent is already looking for a photo in the background |
+| **Your earpiece buys time** | *"Say the Massey Hall one was unreal. Say give me a sec"* An agent is already looking for a photo in the background |
 | **The proof lands** | *"Photo's on your phone. Show them now."* It's on screen and in your camera roll |
 | **They push too hard** | Tap **Panic**. Your phone rings with a fake call. *"Sorry, I have to take this."* |
 
-The whispered lines come from real test runs, some shortened. To run the demo yourself, follow the [demo runbook](docs/demo-runbook.md).
+The whispered lines come from a real test run, and they change every time. To run the demo yourself, follow the [demo runbook](docs/demo-runbook.md).
 
 ## 🧭 Overview
 
 Whispr is a lighthearted improv game for iPhone and headphones. It listens to your conversation, whispers the perfect next line into your ear, and goes and finds the proof when you're bluffing.
 
-> *Like the Kingsman scene where Roxy feeds Eggsy the right answers through his earpiece.*
+> *Like the Kingsman scene where Eggsy gets fed the right answers through his earpiece.*
 
 ### Why Whispr?
 
-- **It waits for your cue.** Roxy only coaches after the other person's turn, never on your own words.
+- **It waits for your cue.** Whispr only coaches after the other person's turn, never on your own words.
 - **It's short enough to use.** Every line is capped at 15 words, because you have to hear it and say it mid-conversation.
 - **It backs you up.** When someone asks for proof, a background task looks for a photo while you keep talking.
 - **It gets you out.** When the bluff falls apart, a fake call gives you a reason to walk away.
@@ -65,14 +65,14 @@ Whispr is a lighthearted improv game for iPhone and headphones. It listens to yo
 | Feature | Description |
 |---|---|
 | **Fast decisions** | On each finished line, Jev decides who spoke, whether you need a line, whether to find a photo, and how close you are to being caught |
-| **The line to say** | Claude Haiku 5.5 writes the words: one line, 15 words at most |
+| **The line to say** | Claude Haiku 5.5 writes the words: one line, 15 words at most, built from the names and details in your conversation |
 | **Won't talk over you** | At most one reply every 5 seconds, and only when Jev is confident you need one |
 | **Cover-blown meter** | The app shows how close you are to being caught, updated with each line from the other person |
 | **Survives failures** | If Jev or Haiku fails, the conversation keeps going and the next line tries again |
 
 ### 🎭 Personas
 
-Choose who you're playing under **Settings → Persona**. Changing persona starts a new scene.
+Choose who you're playing under **Settings → Persona**. Every persona follows whatever the conversation is actually about, and changing persona starts a new scene.
 
 | Persona | The scene | Proof photos |
 |---|---|---|
@@ -89,7 +89,7 @@ Choose who you're playing under **Settings → Persona**. Changing persona start
 | **Picks a believable shot** | Results that won't load are skipped, and it prefers a big portrait image that could pass for a phone photo |
 | **Cached fallback** | If search fails or takes over 5 seconds, Superfan falls back to a known-good photo |
 | **Made for the phone** | The gateway downloads each photo and serves it itself, because many image hosts refuse the app's requests |
-| **Ready to show** | The photo appears in the app and saves to your camera roll, then Roxy tells you it's there |
+| **Ready to show** | The photo appears in the app and saves to your camera roll, then Whispr tells you it's there |
 
 ### 🚨 Panic button
 
@@ -97,7 +97,7 @@ Choose who you're playing under **Settings → Persona**. Changing persona start
 |---|---|
 | **Fake incoming call** | Tap **Panic** and your phone rings out loud with a call from whoever you choose |
 | **Time to pocket it** | Ring right away, or after 5 or 10 seconds |
-| **Rings when closed** | Turn this on in Settings to ring through iOS even when Whispr is closed. Answered calls stay in a small pill while the app is open |
+| **Two call screens** | Whispr's own full-screen call, or the real iOS call screen |
 | **Picks back up** | Listening pauses during the call and resumes when it ends |
 
 ### 🔍 Built for the stage
@@ -105,7 +105,7 @@ Choose who you're playing under **Settings → Persona**. Changing persona start
 - **Demo fallback:** buttons in Settings play the other person's line if live transcription fails
 - **Stays connected:** the app reconnects by itself and keeps the screen awake while listening
 - **Big text:** every whisper is also shown large on screen, so judges can see it if the audio fails
-- **Tested:** 46 brain tests and 21 gateway tests
+- **Tested:** 56 brain tests and 21 gateway tests
 
 ---
 

@@ -13,9 +13,10 @@ import app.photo as photo_module
 from app.config import Settings
 from app.events import TranscriptIn
 from app.main import create_app
-from app.prompts import PHOTO_COMING_NOTE
+from app.personas import PERSONAS
+from app.prompts import PHOTO_COMING_NOTE, photo_query_system, whisper_system
 from app.session import PHOTO_READY_WHISPER, Deps, Session
-from app.whisper import write_whisper
+from app.whisper import cap_words, write_whisper
 
 IMAGE_URL = "https://img.example/laufey.jpg"
 
@@ -51,7 +52,7 @@ class Backend:
                 anthropic_api_key="test",
                 jev_api_key="test",
                 brave_search_api_key="test",
-                public_base_url="https://roxy.example",
+                public_base_url="https://whispr.example",
                 **settings,
             ),
             http=httpx.AsyncClient(transport=httpx.MockTransport(self._http)),
@@ -323,7 +324,7 @@ def test_search_failure_uses_the_cached_photo(cached_photo):
 
     assert done["ok"] is True
     assert done["used_fallback"] is True
-    assert done["image_url"] == "https://roxy.example/assets/fallback.jpg"
+    assert done["image_url"] == "https://whispr.example/assets/fallback.jpg"
 
 
 def test_fallback_photo_url_takes_priority(cached_photo):
@@ -426,8 +427,33 @@ def test_default_persona_is_the_fan():
     backend = Backend()
     run_line(backend, line())
 
-    assert "Scotiabank Arena" in backend.claude_requests[0]["system"]
-    assert "Scotiabank Arena" in backend.jev_requests[0]["state"]
+    assert "whatever the other person brings up" in backend.claude_requests[0]["system"]
+    assert "whatever the other person brings up" in backend.jev_requests[0]["state"]
+
+
+@pytest.mark.parametrize("persona_id", PERSONAS)
+def test_no_persona_steers_towards_a_specific_artist_or_venue(persona_id):
+    persona = PERSONAS[persona_id]
+    prompts = whisper_system(persona) + persona.scenario
+    if persona.photo_hint:
+        prompts += photo_query_system(persona)
+
+    for word in ("laufey", "scotiabank", "from the start", "encore"):
+        assert word not in prompts.lower()
+
+
+@pytest.mark.parametrize("persona_id", PERSONAS)
+def test_every_persona_stays_specific_to_the_conversation(persona_id):
+    assert "Be specific to this conversation" in whisper_system(PERSONAS[persona_id])
+
+
+def test_cached_photo_has_no_hardcoded_caption(cached_photo):
+    backend = Backend()
+    backend.fail_search = True
+    done = done_event(backend)
+
+    assert done["used_fallback"] is True
+    assert done["title"] is None
 
 
 @pytest.mark.parametrize(
@@ -439,7 +465,6 @@ def test_persona_shapes_the_whisper_and_jev(persona_id, phrase):
     run_with_persona(backend, persona_id, line("Tell me more?"))
 
     assert phrase in backend.claude_requests[0]["system"]
-    assert "Scotiabank Arena" not in backend.claude_requests[0]["system"]
     assert phrase in backend.jev_requests[0]["state"]
 
 
@@ -597,11 +622,17 @@ def test_unsized_images_still_count_but_rank_after_vertical_ones():
     assert done_event(backend)["image_url"] == "https://img.example/tall.jpg"
 
 
-def test_photo_query_asks_for_the_venue_and_a_crowd_shot():
+def test_photo_query_asks_for_the_place_and_a_crowd_shot():
     backend = Backend()
     done_event(backend)
 
     system = next(r["system"] for r in backend.claude_requests if "image search query" in r["system"])
-    assert "Scotiabank Arena" in system
+    assert "add Toronto only for a local place or event" in system
     assert '"crowd"' in system
 
+
+
+def test_word_cap_doesnt_cut_a_number_at_its_decimal_point():
+    line = "Say head gaskets are a myth, friend. Say this Outback has the 2.5 boxer that never blew once."
+
+    assert cap_words(line) == "Say head gaskets are a myth, friend."

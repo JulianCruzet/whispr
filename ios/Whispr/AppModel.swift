@@ -48,7 +48,7 @@ final class AppModel {
     var lines: [TranscriptLine] = []
     var partial = ""
     var currentWhisper: String?
-    /// Roxy's voice is streaming into the wearer's ear right now.
+    /// Whispr's voice is streaming into the wearer's ear right now.
     var speaking = false
     var risk: Double = 0
     var tasks: [ProofTask] = []

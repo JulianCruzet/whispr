@@ -43,7 +43,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         await deps.http.aclose()
         await deps.claude.close()
 
-    app = FastAPI(title="Roxy backend", lifespan=lifespan)
+    app = FastAPI(title="Whispr backend", lifespan=lifespan)
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR, check_dir=False), name="assets")
 
     def get_session(session_id: str) -> Session:

@@ -1,6 +1,6 @@
-# Project Roxy (working title): LarpHacks 2026
+# Whispr: LarpHacks 2026
 
-> Like the Kingsman scene where Roxy feeds Eggsy the right answers through his earpiece.
+> Like the Kingsman scene where Eggsy gets fed the right answers through his earpiece.
 > An AI listens to your conversation through your AirPods and whispers what to say next, in real time.
 > When you're bluffing, it goes and gets the proof, then tells you it's on your phone.
 
@@ -62,7 +62,7 @@ iPhone app
 | Speech-to-text | **ElevenLabs Scribe** (realtime) | Streams audio over a WebSocket and returns a live transcript; has speaker labels |
 | Decisions | **Jev** by TypeSafe AI | `POST https://api.typesafe.ai/v1/systemone`, model `jev-latest`; 70–500 ms (vendor figures). Check the details at docs.typesafe.ai |
 | Whisper line | **Claude Haiku 5.5** (`claude-haiku-5-5`) | $0.10 / $0.50 per 1M tokens, about $0.0002 per whisper. Use low effort, thinking off |
-| Text-to-speech | **ElevenLabs Flash** | Their lowest-latency voice model; pick a calm, quiet "Roxy" voice |
+| Text-to-speech | **ElevenLabs Flash** | Their lowest-latency voice model; pick a calm, quiet voice |
 | Photo search | SerpAPI or Brave Search image API | Found photo, with a **cached fallback photo** in case search fails or takes >5 s |
 | Photo delivery | **On screen in the app** | The backend returns the image URL and the app displays it |
 | Backend hosting | **Render** | Also counts for the Render track |
@@ -148,7 +148,7 @@ iPhone app
 
 ## 9. Still to decide
 
-- **Project name** + team name (for the submission)
+- **Team name** (for the submission)
 - **Theme tie-in** once the theme is known
 - Who plays the "true Laufey fan" in the demo, and their 4–5 scripted lines
 - Mic setup: AirPods mic vs. iPhone mic (decided by the 11:45 test)

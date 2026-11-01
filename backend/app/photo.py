@@ -120,7 +120,7 @@ def fallback_photo(settings: Settings) -> Photo | None:
     else:
         log.error("No FALLBACK_PHOTO_URL and no cached photo at %s", ASSETS_DIR / FALLBACK_PHOTO)
         return None
-    return Photo(image_url=image_url, title="Laufey at Scotiabank Arena", used_fallback=True)
+    return Photo(image_url=image_url, used_fallback=True)
 
 
 async def find_photo(
