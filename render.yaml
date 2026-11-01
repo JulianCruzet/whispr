@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: whispr-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: JEV_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SERPAPI_KEY
+        sync: false
+      - key: AGENTBOXD_API_KEY
+        sync: false
+      - key: AGENTBOXD_INBOX
+        sync: false
+      - key: PHOTO_EMAIL_TO
+        sync: false
+      - key: FALLBACK_PHOTO_URL
+        sync: false
