@@ -48,6 +48,8 @@ final class AppModel {
     var lines: [TranscriptLine] = []
     var partial = ""
     var currentWhisper: String?
+    /// The short cue Whispr says in the ear for currentWhisper, shown big so what's heard is on screen.
+    var currentCue: String?
     /// "The photo's in your camera roll…", shown with the proof photo.
     var photoNotice: String?
     /// Whispr's voice is streaming into the wearer's ear right now.
@@ -438,12 +440,13 @@ final class AppModel {
             } else {
                 partial = text
             }
-        case let .whisper(_, text, reason):
+        case let .whisper(_, text, spoken, reason):
             // The photo alert goes with the photo; the line the wearer is saying stays put.
             if reason == "photo_ready" {
                 photoNotice = text
             } else {
                 currentWhisper = text
+                currentCue = spoken
             }
         case let .risk(score):
             risk = score

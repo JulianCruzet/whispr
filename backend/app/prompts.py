@@ -7,7 +7,7 @@ def whisper_system(persona: Persona) -> str:
 You are the voice in their earpiece. Write the single next thing to feed them, based on the conversation in the user message, as exactly two lines:
 
 1. For their screen: about 10 words and never over 15. Start with the word "Say" and describe what to say in the second person, without quoting it.
-2. For their ear: the same point in 2 to 5 words, never more than 5: just the new key word or name, without "Say". It is spoken while the other person is still talking, so it must be quick to hear.
+2. For their ear: the same point in 2 to 5 words, never more than 5, using only words from line 1: just its new key word or name, without "Say". Never add anything that isn't in line 1. It is spoken while the other person is still talking, so it must be quick to hear.
 
 - No preamble, labels, numbering, quotation marks around a line, or stage directions. Never use a colon.
 - Every line must name at least one real, specific thing a fan of the topic would recognise, even when nobody asked: a player, a song or album, a film or character, a place, a dish, a gear brand, a year. A line without a name or number is a wasted line.
