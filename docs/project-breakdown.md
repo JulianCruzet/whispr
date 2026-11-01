@@ -17,7 +17,7 @@ You're bluffing being a Laufey fan with a *real* Laufey fan.
 
 1. They say: "Wait, you saw her live? Which show?"
 2. Your AirPod whispers: *"Say the Toronto show at Scotiabank Arena. Say 'From The Start' live wrecked you."*
-3. In the background, the agent finds a photo of the Laufey concert at Scotiabank Arena and sends it to your phone.
+3. In the background, the agent finds a photo of the Laufey concert at Scotiabank Arena and puts it on your phone's screen.
 4. A few seconds later your AirPod whispers: *"Photo's on your phone. Show them the shot from the floor."*
 5. You pull out your iPhone and show the proof.
 6. They push harder with a question you can't bluff, so you press **Panic**.
@@ -38,8 +38,7 @@ iPhone app
   │     │     • cover_blown_risk (score: how close am I to getting caught)
   │     ├─ Claude Haiku 5.5: writes the actual whisper line (short, ≤15 words)
   │     └─ Background photo task:
-  │           image search → pick the best photo → email it via Agentboxd
-  │           (+ return the image URL to the app)
+  │           image search → pick the best photo → return the image URL to the app
   ├─ ElevenLabs Flash TTS → whisper played in your AirPods
   ├─ Shows the photo / saves it to Photos → "Photo's ready."
   └─ Panic button → fake incoming call on screen
@@ -49,7 +48,6 @@ iPhone app
 - **Jev** is the gatekeeper and router. It's very fast and cheap, so it runs on every transcript chunk and decides *whether* and *what* to do.
 - **Haiku 5.5** only writes the words. That keeps it fast and cheap.
 - **ElevenLabs** is the ears (Scribe) and the voice (Flash TTS).
-- **Agentboxd** gives the agent an email inbox to deliver proof to your phone.
 
 **Target latency:** about 1–1.5 seconds from them finishing a sentence to you hearing the cue.
 
@@ -66,7 +64,7 @@ iPhone app
 | Whisper line | **Claude Haiku 5.5** (`claude-haiku-5-5`) | $0.10 / $0.50 per 1M tokens, about $0.0002 per whisper. Use low effort, thinking off |
 | Text-to-speech | **ElevenLabs Flash** | Their lowest-latency voice model; pick a calm, quiet "Roxy" voice |
 | Photo search | SerpAPI or Brave Search image API | Found photo, with a **cached fallback photo** in case search fails or takes >5 s |
-| Photo delivery | **Agentboxd** | The agent emails the photo from its own inbox to your phone |
+| Photo delivery | **On screen in the app** | The backend returns the image URL and the app displays it |
 | Backend hosting | **Render** | Also counts for the Render track |
 | iPhone app | **Native SwiftUI (Xcode)**, with a **web app in Safari as fallback** | Native gives reliable mic routing and saving to Photos |
 | Panic button | **iOS CallKit** fake call, with a **Call GIF + vibration as fallback** | Runs in the app, no backend needed. CallKit cuts off audio during the call (accepted for now) |
@@ -79,7 +77,6 @@ iPhone app
 |---|---|---|
 | **Overall** | Judged out of 30 (see below) | 1st: $300 + $297 ElevenLabs Pro credits/person + $300 Featherless credits |
 | **ElevenLabs** | Scribe + TTS are the core of the product | **$897 in Max credits per person** |
-| **Agentboxd** | The agent emails the proof photo from its inbox | 3 months of the Team plan ($360) |
 | **Render** | Backend deployed on Render, shown live | $500 / $300 / $100 in credits |
 
 **Judging, 30 points (6 criteria × 5):** Working Product, Usefulness, **Theme Alignment** (the theme is revealed at opening, so make sure we tie into it), Creativity, Ease of Use, Demo.
@@ -91,7 +88,7 @@ iPhone app
 | Person | Owns | Done when |
 |---|---|---|
 | **A: Ears & Voice (iPhone)** | iPhone app: mic capture, Scribe streaming, TTS playback to AirPods, photo display/save, Panic button | Talk near the phone, the transcript appears, and a whisper plays in the AirPods. Pressing Panic shows the fake call |
-| **B: Brain & Tasks (backend)** | Jev gates, Haiku whisper prompt, photo task (search + Agentboxd email), API for the app | A transcript snippet goes in, a whisper line comes out, and the photo is emailed when needed |
+| **B: Brain & Tasks (backend)** | Jev gates, Haiku whisper prompt, photo task (search + image URL), API for the app | A transcript snippet goes in, a whisper line comes out, and the photo's URL is returned when needed |
 | **C: Face & Stage** | Render deploy, UI polish (live transcript, suggestion text, cover-blown meter, task status), demo script + pitch, submission form | Deployed URL works, the 2-min script is rehearsed, and the submission is in |
 
 **Shared contract (agree on this early):** simple JSON events between app and backend:
@@ -108,7 +105,7 @@ iPhone app
 | **12:00–1:30** | Each person builds their piece separately (mock the other pieces) |
 | **1:30** | **First end-to-end**: speak → transcript → whisper heard |
 | **2:30–3:30** | Google workshop (optional; someone keeps building) |
-| **3:30** | Photo task working end to end (search → email → "photo's ready") |
+| **3:30** | Photo task working end to end (search → on screen → "photo's ready") |
 | **4:00** | Panic button working (press Panic → fake call on screen) |
 | **4:30** | Feature freeze. Polish the UI, deploy to Render, fix bugs only |
 | **5:00** | Rehearse the demo 3+ times with the "true fan" teammate |
@@ -142,7 +139,6 @@ iPhone app
 - [ ] **Jev API key** (console.typesafe.ai)
 - [ ] **ElevenLabs coupon** (ElevenLabs Discord → coupon-codes → Start Redemption → LarpHacks, use your Luma email)
 - [ ] **Anthropic API key** with a few dollars of credit (Haiku 5.5)
-- [ ] **Agentboxd** account + redeem `LARPHACKS-2026` → create API key + inbox
 - [ ] Image search API key (SerpAPI or Brave)
 - [ ] Render account
 - [ ] All keys go in a `.env` file. **Never paste keys in chat or commit them**
