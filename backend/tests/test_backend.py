@@ -177,7 +177,8 @@ def test_the_ear_gets_a_short_cue_and_the_screen_the_full_line():
     assert events[1]["text"] == "Say the Toronto crowd was lit and God's Plan was the high point."
     assert events[1]["spoken"] == "Crowd was lit, God's Plan."
     system = backend.claude_requests[0]["system"]
-    assert "For their ear" in system and "3 to 6 words" in system
+    assert "For their ear" in system and "2 to 5 words" in system
+    assert "Never repeat a name, place or detail" in system
 
 
 @pytest.mark.parametrize(
@@ -199,7 +200,7 @@ def test_a_long_cue_is_cut_on_the_last_clause_that_fits():
     )
     events = run_line(backend, line())
 
-    assert events[1]["spoken"] == "Crowd was lit, God's Plan closed it"
+    assert events[1]["spoken"] == "Crowd was lit"
     assert len(events[1]["spoken"].split()) <= MAX_SPOKEN_WORDS
 
 

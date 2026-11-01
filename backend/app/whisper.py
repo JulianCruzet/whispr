@@ -9,7 +9,7 @@ from app.prompts import PHOTO_COMING_NOTE, photo_query_system, whisper_system
 
 MAX_WHISPER_WORDS = 15
 # The ear gets a short cue: a long line spoken mid-conversation is hard to follow.
-MAX_SPOKEN_WORDS = 7
+MAX_SPOKEN_WORDS = 5
 
 
 class Whisper(NamedTuple):
