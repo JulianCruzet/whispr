@@ -1,4 +1,4 @@
-# Roxy backend
+# Whispr backend
 
 Takes transcript lines from the app and decides whether to coach the wearer. Jev makes the decisions, Claude Haiku 5.5 writes the whisper line, and a background task finds the proof photo.
 

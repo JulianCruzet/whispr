@@ -1,3 +1,5 @@
+import re
+
 import anthropic
 
 from app.config import Settings
@@ -34,8 +36,9 @@ def cap_words(line: str) -> str:
     if len(words) <= MAX_WHISPER_WORDS:
         return capped
     # Over the cap: end on the last clause that fits, so it doesn't stop mid-sentence.
-    end = max(capped.rfind(mark) for mark in ".!?,")
-    return capped[: end + 1].rstrip(",") if end > 0 else capped
+    # The mark must end a word, so a number like 2.5 isn't taken for the end of a sentence.
+    ends = [match.end() for match in re.finditer(r"[.!?,](?=\s|$)", capped)]
+    return capped[: ends[-1]].rstrip(",") if ends else capped
 
 
 async def write_whisper(

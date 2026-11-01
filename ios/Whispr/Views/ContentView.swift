@@ -358,7 +358,7 @@ private struct CalibrationPrompt: View {
     }
 }
 
-/// Bars while Roxy is talking, in the text grey.
+/// Bars while Whispr is talking, in the text grey.
 private struct VoiceBars: View {
     let animated: Bool
 
