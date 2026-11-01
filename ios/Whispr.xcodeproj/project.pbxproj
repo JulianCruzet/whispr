@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		10328D3D721577D4A02DC5AC /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = F536EF866E825A2FB88E15AB /* AudioPipeline.swift */; };
 		145E2758C7E5336AF753F841 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28CC77D1C103788D77193BB /* BackendClient.swift */; };
+		1EA90AA06C6F9B8DC13F05A8 /* Ringtone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CAF685C2396E1DE8D7917B /* Ringtone.swift */; };
 		2963057069F25B9734F7F744 /* FakeCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ABB3999F6496CAE198D5F49 /* FakeCallView.swift */; };
 		4AF99213F98672AD1647F28C /* PhotoSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24C07F7FD888884269C7AE8 /* PhotoSaver.swift */; };
 		526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCBD08640207C29B74FD832 /* SettingsView.swift */; };
@@ -24,6 +25,7 @@
 		209959725DFF9E07930E5813 /* Whispr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Whispr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B08BA3C43722A9D711D2D2D /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protocol.swift; sourceTree = "<group>"; };
 		668F4D5F3970A647EA69EF5E /* FakeCallKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeCallKit.swift; sourceTree = "<group>"; };
+		88CAF685C2396E1DE8D7917B /* Ringtone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ringtone.swift; sourceTree = "<group>"; };
 		9ABB3999F6496CAE198D5F49 /* FakeCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeCallView.swift; sourceTree = "<group>"; };
 		ADCBD08640207C29B74FD832 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B184F395489DB9EBBE4591D2 /* WhisprApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisprApp.swift; sourceTree = "<group>"; };
@@ -48,6 +50,7 @@
 			children = (
 				668F4D5F3970A647EA69EF5E /* FakeCallKit.swift */,
 				9ABB3999F6496CAE198D5F49 /* FakeCallView.swift */,
+				88CAF685C2396E1DE8D7917B /* Ringtone.swift */,
 			);
 			path = Panic;
 			sourceTree = "<group>";
@@ -168,6 +171,7 @@
 				2963057069F25B9734F7F744 /* FakeCallView.swift in Sources */,
 				4AF99213F98672AD1647F28C /* PhotoSaver.swift in Sources */,
 				B5C7730C67C341FBA1B68303 /* Protocol.swift in Sources */,
+				1EA90AA06C6F9B8DC13F05A8 /* Ringtone.swift in Sources */,
 				526A796BBDF3A24162C14DF7 /* SettingsView.swift in Sources */,
 				C6EE94F9CDEE6E78502C19A5 /* WhisprApp.swift in Sources */,
 			);

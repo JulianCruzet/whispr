@@ -84,6 +84,7 @@ final class AppModel {
     private let client = BackendClient()
     private let audio = AudioPipeline()
     private let callKit = FakeCallKit()
+    private let ringtone = Ringtone()
     private var panicTask: Task<Void, Never>?
     private var vibrationTask: Task<Void, Never>?
     private var resumeListeningAfterPanic = false
@@ -225,21 +226,21 @@ final class AppModel {
                 // CallKit refused (e.g. Do Not Disturb): fall back to our own screen.
                 self.lastError = "iOS call screen unavailable (\(error.localizedDescription)); using the built-in one."
                 self.panicUsesCallKit = false
-                self.startVibrating()
+                self.startRinging()
             }
         } else {
-            startVibrating()
+            startRinging()
         }
     }
 
     func answerFakeCall() {
-        stopVibrating()
+        stopRinging()
         panic = .inCall(since: .now)
     }
 
     func endFakeCall() {
         guard panic != .idle else { return }
-        stopVibrating()
+        stopRinging()
         callKit.hangUp()
         panic = .idle
         if resumeListeningAfterPanic {
@@ -248,8 +249,9 @@ final class AppModel {
         }
     }
 
-    /// Buzzes like an incoming call (works on silent too).
-    private func startVibrating() {
+    /// Rings out loud on the iPhone speaker and buzzes, like an incoming call.
+    private func startRinging() {
+        ringtone.start()
         vibrationTask?.cancel()
         vibrationTask = Task { @MainActor in
             while !Task.isCancelled {
@@ -259,7 +261,8 @@ final class AppModel {
         }
     }
 
-    private func stopVibrating() {
+    private func stopRinging() {
+        ringtone.stop()
         vibrationTask?.cancel()
         vibrationTask = nil
     }
