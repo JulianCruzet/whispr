@@ -13,7 +13,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `{"type":"clear_calibration"}`: forget both voice samples, calibrated or learnt, for this phone |
 | text | `{"type":"cancel_calibration"}`: stop a calibration step in progress, keeping nothing. Nothing said during calibration ever reaches the brain or the conversation |
 | text | `{"type":"set_persona","persona":"first_date"}`: who the wearer is playing: `fan` (default), `interview`, `first_date` or `car_salesman`. Send it on every `ready` and when it changes. Changing it clears the conversation so far |
-| text | `{"type":"set_turns","alternate":true}`: strict turn-taking for a rigged demo. Lines are labelled `me`, `them`, `me`... in order, starting with the wearer, whatever the voices sound like; a line holding both voices counts as two turns. Scribe then ends a line after 0.7 s of silence instead of 0.4 s. Send it on every `ready` |
+| text | `{"type":"set_turns","alternate":true}`: strict turn-taking for a rigged demo. Lines are labelled `me`, `them`, `me`... in order, starting with the wearer, whatever the voices sound like; a line holding both voices counts as two turns, and a line that's only filler ("mm", "uh") or 12 dB quieter than the recent turns is skipped as background without using up a turn. Scribe then ends a line after 0.7 s of silence instead of 0.4 s. Send it on every `ready` |
 | text | `{"type":"flip_turn"}`: turn-taking slipped, swap who is next |
 | text | `{"type":"ping"}` |
 

@@ -19,6 +19,14 @@ import { speak, TTS_SAMPLE_RATE } from "./voice/tts.js";
 const CALIBRATION_TARGET_SECONDS: Record<Who, number> = { me: 6, them: 5 };
 /** Learning a voice from Jev's verdicts needs this much speech in the sample itself. */
 const LEARN_TARGET_SECONDS: Record<Who, number> = { me: 4, them: 3 };
+/**
+ * With strict turns, a line this much quieter than the recent turns is background (people
+ * nearby, a TV), and is skipped so it doesn't use up someone's turn.
+ */
+const TURN_BACKGROUND_DB = 12;
+const TURN_LEVELS_KEPT = 6;
+/** Lines that are only these sounds are usually noise, not someone's turn. */
+const FILLER = /^(?:h?m+|u+h+|u+m+|a+h+|o+h+|e+r+|h+m+)$/;
 /** How often the live calibration progress goes to the phone while someone talks. */
 const PROGRESS_EVERY_MS = 250;
 /** ...and gives up after this many lines, keeping the sample if it has at least the minimum. */
@@ -70,6 +78,8 @@ export class PhoneSession {
   private learning: Record<Who, Buffer[]> = { me: [], them: [] };
   /** Strict turn-taking (a rigged demo): who the next line is, regardless of voice. */
   private turns: { next: Who } | null = null;
+  /** Loudness of the recent turns, to tell background lines from the two people talking. */
+  private turnLevels: number[] = [];
   /** Lines in a row that didn't match the voice being learnt; two mean the start was wrong. */
   private learningMisses: Record<Who, number> = { me: 0, them: 0 };
   /** Whispers are spoken one after another, never over each other. */
@@ -137,6 +147,7 @@ export class PhoneSession {
     if (msg.type === "set_turns") {
       // Starts again with the wearer each time it's switched on.
       this.turns = msg.alternate ? { next: "me" } : null;
+      this.turnLevels = [];
       this.scribe.setLineSilence(msg.alternate ? TURN_SILENCE_SECONDS : LINE_SILENCE_SECONDS);
       this.send({ type: "turn", next: this.turns?.next ?? null });
     }
@@ -269,6 +280,15 @@ export class PhoneSession {
     // A quick back-and-forth can arrive as one line: split it where the voice changes.
     const parts = words ? splitBySpeaker(words, printOf, this.speakers) : null;
     if (this.turns) {
+      const background = this.turnBackground(text, levelDb);
+      if (background) {
+        console.log(`${tag} skipped as background (${background}), still ${this.turns.next}'s turn: ${text}`);
+        return;
+      }
+      if (levelDb !== null) {
+        this.turnLevels.push(levelDb);
+        if (this.turnLevels.length > TURN_LEVELS_KEPT) this.turnLevels.shift();
+      }
       // Strict turns: voices don't decide, the order does. A line holding both voices
       // still counts as two turns.
       for (const part of parts ?? [{ text }]) {
@@ -296,6 +316,16 @@ export class PhoneSession {
     console.log(`${tag} ${verdict.speaker} (${why}): ${text}`);
     const audio = verdict.speaker === "unknown" && words ? this.scribe.audioBetween(words[0].start, words[words.length - 1].end) : null;
     this.onTurn(text, verdict.speaker, audio);
+  }
+
+  /** Why a line isn't anyone's turn (only filler, or far quieter than the turns), or null. */
+  private turnBackground(text: string, levelDb: number | null): string | null {
+    const words = text.toLowerCase().replace(/[^a-z\s']/g, " ").split(/\s+/).filter(Boolean);
+    if (words.length && words.every((w) => FILLER.test(w))) return "only filler";
+    if (levelDb === null || this.turnLevels.length < 2) return null;
+    const sorted = [...this.turnLevels].sort((a, b) => a - b);
+    const usual = sorted[Math.floor(sorted.length / 2)];
+    return levelDb < usual - TURN_BACKGROUND_DB ? `${(usual - levelDb).toFixed(0)} dB quieter` : null;
   }
 
   /** While someone talks during calibration, moves the bar before Scribe finishes the line. */
