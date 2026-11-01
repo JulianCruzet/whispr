@@ -62,16 +62,20 @@ final class AppModel {
     /// backend can tell them apart by voice. The second step can be skipped.
     enum Calibration: Equatable {
         case none
-        /// Waiting for a sentence from this person.
-        case sampling(Speaker)
+        /// Listening to this person: `heard` seconds of their speech so far, out of
+        /// `target` (nil until the backend reports after their first line).
+        case sampling(Speaker, heard: Double = 0, target: Double? = nil)
         /// The wearer's sample is in; ask for the other person's.
         case needThem
-        /// This person's sentence was too short or quiet to use.
-        case failed(Speaker)
-        /// Both samples, or the wearer's only (then the backend falls back to loudness).
+        /// This person's sample couldn't be used: too little speech, or (for them) it was
+        /// the wearer talking.
+        case failed(Speaker, soundedLikeYou: Bool = false)
+        /// Both samples, or the wearer's only (then the backend judges by the wearer's voice alone).
         case done(bothVoices: Bool)
     }
     var calibration: Calibration = .none
+    /// The wearer chose to go on without the other person's sample; a reconnect keeps that.
+    private var skippedThem = false
 
     var lastPhoto: UIImage?
     /// Whether lastPhoto made it into the camera roll.
@@ -174,7 +178,7 @@ final class AppModel {
             return
         }
         connection = .connecting
-        client.connect(to: url)
+        client.connect(to: url, deviceId: UIDevice.current.identifierForVendor?.uuidString)
     }
 
     // MARK: Staying connected
@@ -317,20 +321,21 @@ final class AppModel {
         vibrationTask = nil
     }
 
-    /// The next sentence the wearer says teaches the backend how loud their own voice is.
     private func sendPersona() {
         client.send(json: ["type": "set_persona", "persona": persona.rawValue])
     }
 
-    /// The next sentence `who` says becomes their voice sample.
+    /// The next few lines `who` says become their voice sample.
     func calibrate(_ who: Speaker) {
         client.send(json: ["type": "calibrate", "who": who == .them ? "them" : "me"])
         calibration = .sampling(who)
+        if who == .them { skippedThem = false }
     }
 
     /// Carry on with only the wearer's sample.
     func skipCalibratingThem() {
         calibration = .done(bothVoices: false)
+        skippedThem = true
     }
 
     /// Pretend the other person said `text` (skips speech-to-text). For testing and demo fallback.
@@ -382,12 +387,20 @@ final class AppModel {
         case let .whisperAudioStart(_, sampleRate):
             audio.setPlaybackSampleRate(Double(sampleRate))
             speaking = true
-        case let .calibrated(who, ok):
+        case let .calibrating(who, seconds, target):
+            let speaker: Speaker = who == "them" ? .them : .me
+            if case .sampling(speaker, _, _) = calibration {
+                calibration = .sampling(speaker, heard: seconds, target: target)
+            }
+        case let .calibrated(who, ok, reason):
+            // Also arrives right after connecting, for samples the backend kept for this phone.
             let speaker: Speaker = who == "them" ? .them : .me
             if !ok {
-                calibration = .failed(speaker)
-            } else {
-                calibration = speaker == .me ? .needThem : .done(bothVoices: true)
+                calibration = .failed(speaker, soundedLikeYou: reason == "sounds_like_you")
+            } else if speaker == .them {
+                calibration = .done(bothVoices: true)
+            } else if calibration != .done(bothVoices: true) {
+                calibration = skippedThem ? .done(bothVoices: false) : .needThem
             }
         case let .error(message):
             lastError = message

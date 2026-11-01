@@ -106,18 +106,32 @@ struct ContentView: View {
                 Label("Calibrate voices", systemImage: "person.2.wave.2")
             }
             .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
-        case let .failed(who):
+        case .failed(.me, _):
             Button {
-                model.calibrate(who)
+                model.calibrate(.me)
             } label: {
-                Label(who == .me ? "Didn't catch you. Try again" : "Didn't catch them. Try again",
-                      systemImage: "arrow.clockwise")
+                Label("Didn't catch enough of you. Try again", systemImage: "arrow.clockwise")
             }
             .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
-        case let .sampling(who):
+        case let .failed(_, soundedLikeYou):
+            HStack(spacing: 8) {
+                Button {
+                    model.calibrate(.them)
+                } label: {
+                    Label(soundedLikeYou ? "That was you. Get them talking" : "Didn't catch them. Try again",
+                          systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
+                Button("Skip") { model.skipCalibratingThem() }
+                    .buttonStyle(PillButtonStyle(kind: .secondary, height: 40))
+                    .frame(width: 84)
+            }
+        case let .sampling(who, heard, target):
             CalibrationPrompt(
                 step: who == .me ? "1/2" : "2/2",
-                text: who == .me ? "Say one sentence in your normal voice" : "Have them say one sentence"
+                text: who == .me ? "Talk for a few seconds in your normal voice" : "Get them talking for a few seconds",
+                heard: heard,
+                target: target
             )
         case .needThem:
             HStack(spacing: 8) {
@@ -342,25 +356,49 @@ private struct CoverReading: View {
     }
 }
 
-/// The calibration step in progress.
+/// The calibration step in progress, with how much of the person's speech it has heard.
 private struct CalibrationPrompt: View {
     let step: String
     let text: String
+    let heard: Double
+    /// Nil until the backend reports after the first line.
+    let target: Double?
+
+    private var progress: Double {
+        guard let target, target > 0 else { return 0 }
+        return min(heard / target, 1)
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .foregroundStyle(Theme.text2)
-            Text(text)
-                .font(Theme.emphasis)
-                .foregroundStyle(Theme.text)
-            Spacer(minLength: 0)
-            MetaText(step)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "waveform")
+                    .foregroundStyle(Theme.text2)
+                Text(text)
+                    .font(Theme.emphasis)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                MetaText(step)
+            }
+            HStack(spacing: 10) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.line)
+                        Capsule().fill(Theme.text).frame(width: geo.size.width * progress)
+                    }
+                }
+                .frame(height: 3)
+                .animation(Theme.appear, value: progress)
+                MetaText(target.map { String(format: "%.1f / %.1f s", min(heard, $0), $0) } ?? "listening")
+            }
         }
         .padding(.horizontal, 14)
-        .frame(height: 44)
+        .padding(.vertical, 12)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface2))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(target == nil ? "Listening" : "\(Int(progress * 100)) percent")
     }
 }
 
