@@ -8,6 +8,9 @@ import { ScribeSession } from "./ears/scribe.js";
 import type { ClientMessage, ServerEvent, Speaker } from "./protocol.js";
 import { speak, TTS_SAMPLE_RATE } from "./voice/tts.js";
 
+/** How much quieter than the wearer a line must be to count as the other person. */
+const ME_MARGIN_DB = 8;
+
 /** Dashboards (mission-control screens) get a copy of every event. */
 export const dashboards = new Set<WebSocket>();
 
@@ -20,6 +23,9 @@ export class PhoneSession {
   readonly id = randomUUID();
   private scribe = new ScribeSession();
   readonly brain: Brain;
+  /** How loud the wearer's own voice is in the mic, learned by "calibrate". */
+  private myLevelDb: number | null = null;
+  private calibrating = false;
 
   constructor(private ws: WebSocket) {
     this.brain = new Brain({
@@ -30,8 +36,18 @@ export class PhoneSession {
     this.scribe.on("partial", (text) =>
       this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" }),
     );
-    // Scribe speaker ids aren't reliably "me" vs "them"; the brain (Jev) decides.
-    this.scribe.on("committed", (text) => this.onTurn(text, "unknown"));
+    this.scribe.on("committed", (text, levelDb) => {
+      if (this.calibrating) {
+        this.calibrating = false;
+        if (levelDb != null) this.myLevelDb = levelDb;
+        this.send({ type: "calibrated", ok: levelDb != null, levelDb: levelDb ?? undefined });
+        this.onTurn(text, "me");
+        return;
+      }
+      const speaker = this.classify(levelDb);
+      console.log(`[${this.id.slice(0, 8)}] ${speaker} (${levelDb?.toFixed(1) ?? "?"} dB): ${text}`);
+      this.onTurn(text, speaker);
+    });
     this.scribe.on("error", (message) => this.send({ type: "error", message }));
 
     let heardAudio = false;
@@ -66,6 +82,13 @@ export class PhoneSession {
     }
     if (msg.type === "ping") this.send({ type: "pong" });
     if (msg.type === "debug_turn" && msg.text) this.onTurn(msg.text, msg.speaker ?? "them");
+    if (msg.type === "calibrate") this.calibrating = true;
+  }
+
+  /** Lines within a few dB of the wearer's calibrated level are theirs; quieter ones are the other person. */
+  private classify(levelDb: number | null): Speaker {
+    if (levelDb == null || this.myLevelDb == null) return "unknown";
+    return levelDb >= this.myLevelDb - ME_MARGIN_DB ? "me" : "them";
   }
 
   private onTurn(text: string, speaker: Speaker) {

@@ -3,6 +3,7 @@
 //
 //   npx tsx scripts/fake-phone.ts "wait, you saw Laufey live?"
 //   npx tsx scripts/fake-phone.ts --wav sample-16k-mono.wav
+//   npx tsx scripts/fake-phone.ts --calibrate --wav conversation.wav   (first line spoken = you)
 //
 // Env: WHISPR_URL (default ws://localhost:8787/ws)
 
@@ -10,7 +11,9 @@ import { readFileSync } from "node:fs";
 import WebSocket from "ws";
 
 const url = process.env.WHISPR_URL ?? "ws://localhost:8787/ws";
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+const calibrate = rawArgs.includes("--calibrate");
+const args = rawArgs.filter((a) => a !== "--calibrate");
 const wavIndex = args.indexOf("--wav");
 const wavPath = wavIndex >= 0 ? args[wavIndex + 1] : null;
 const line = (wavIndex >= 0 ? args.filter((_, i) => i !== wavIndex && i !== wavIndex + 1) : args).join(" ");
@@ -22,6 +25,7 @@ const ms = () => `${String(Date.now() - started).padStart(5)}ms`;
 
 ws.on("open", async () => {
   ws.send(JSON.stringify({ type: "hello", device: "fake-phone", sampleRate: 16000 }));
+  if (calibrate) ws.send(JSON.stringify({ type: "calibrate" }));
   if (line) ws.send(JSON.stringify({ type: "debug_turn", text: line, speaker: "them" }));
   if (wavPath) {
     // Assumes a 16 kHz mono PCM16 WAV with a 44-byte header.
@@ -31,7 +35,7 @@ ws.on("open", async () => {
       await new Promise((r) => setTimeout(r, 100));
     }
   }
-  setTimeout(() => ws.close(), 15000);
+  setTimeout(() => ws.close(), 8000);
 });
 
 ws.on("message", (data, isBinary) => {

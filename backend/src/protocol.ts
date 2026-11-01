@@ -13,6 +13,8 @@ export type ClientMessage =
   | { type: "hello"; device: string; sampleRate: number }
   /** Pretend someone said `text` (skips Scribe). For testing and as a demo fallback. */
   | { type: "debug_turn"; text: string; speaker?: Speaker }
+  /** The next line spoken is the wearer: learn how loud their voice is in the mic. */
+  | { type: "calibrate" }
   | { type: "ping" };
 
 // ---------- backend -> phone (and dashboards) ----------
@@ -36,5 +38,6 @@ export type ServerEvent =
       caption?: string;
       emailed?: boolean;
     }
+  | { type: "calibrated"; ok: boolean; levelDb?: number }
   | { type: "error"; message: string }
   | { type: "pong" };
