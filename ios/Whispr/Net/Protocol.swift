@@ -12,7 +12,8 @@ enum Speaker: String, Codable {
 enum ServerEvent {
     case ready(sessionId: String, integrations: [String: Bool])
     case transcript(id: String, text: String, final: Bool, speaker: Speaker)
-    case whisper(id: String, text: String)
+    /// `reason` "photo_ready": the proof photo just landed; anything else is the line to say.
+    case whisper(id: String, text: String, reason: String)
     case whisperAudioStart(id: String, sampleRate: Int)
     case whisperAudioEnd(id: String)
     case risk(score: Double)
@@ -26,7 +27,7 @@ enum ServerEvent {
 
 extension ServerEvent: Decodable {
     private enum Key: String, CodingKey {
-        case type, sessionId, integrations, id, text, final, speaker, sampleRate, score
+        case type, sessionId, integrations, id, text, final, speaker, sampleRate, score, reason
         case kind, label, ok, imageUrl, caption, emailed, message, who
     }
 
@@ -43,7 +44,9 @@ extension ServerEvent: Decodable {
                                final: try c.decode(Bool.self, forKey: .final),
                                speaker: (try? c.decode(Speaker.self, forKey: .speaker)) ?? .unknown)
         case "whisper":
-            self = .whisper(id: try c.decode(String.self, forKey: .id), text: try c.decode(String.self, forKey: .text))
+            self = .whisper(id: try c.decode(String.self, forKey: .id),
+                            text: try c.decode(String.self, forKey: .text),
+                            reason: try c.decodeIfPresent(String.self, forKey: .reason) ?? "reply")
         case "whisper_audio_start":
             self = .whisperAudioStart(id: try c.decode(String.self, forKey: .id),
                                       sampleRate: try c.decode(Int.self, forKey: .sampleRate))

@@ -154,7 +154,12 @@ export class PhoneSession {
       }
       case "whisper":
         // Its risk score is the same decision already sent with the transcript echo.
-        this.send({ type: "whisper", id: event.id, text: event.text });
+        this.send({
+          type: "whisper",
+          id: event.id,
+          text: event.text,
+          reason: event.reason === "task_done" ? "photo_ready" : "reply",
+        });
         this.speech = this.speech.then(() => this.say(event.id, event.text));
         return;
       case "task_started":

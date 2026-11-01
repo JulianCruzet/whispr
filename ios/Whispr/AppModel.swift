@@ -48,6 +48,8 @@ final class AppModel {
     var lines: [TranscriptLine] = []
     var partial = ""
     var currentWhisper: String?
+    /// "The photo's in your camera roll…", shown with the proof photo.
+    var photoNotice: String?
     /// Whispr's voice is streaming into the wearer's ear right now.
     var speaking = false
     var risk: Double = 0
@@ -358,11 +360,17 @@ final class AppModel {
             } else {
                 partial = text
             }
-        case let .whisper(_, text):
-            currentWhisper = text
+        case let .whisper(_, text, reason):
+            // The photo alert goes with the photo; the line the wearer is saying stays put.
+            if reason == "photo_ready" {
+                photoNotice = text
+            } else {
+                currentWhisper = text
+            }
         case let .risk(score):
             risk = score
         case let .taskStarted(id, _, label):
+            photoNotice = nil
             tasks.append(ProofTask(id: id, label: label))
         case let .taskDone(id, _, _, imageUrl, _, _):
             let url = imageUrl.flatMap(URL.init(string:))

@@ -26,7 +26,8 @@ export type ClientMessage =
 export type ServerEvent =
   | { type: "ready"; sessionId: string; integrations: Record<string, boolean> }
   | { type: "transcript"; id: string; text: string; final: boolean; speaker: Speaker }
-  | { type: "whisper"; id: string; text: string }
+  /** `reason` "photo_ready": the proof photo just landed. Show it with the photo, not over the line. */
+  | { type: "whisper"; id: string; text: string; reason: "reply" | "photo_ready" }
   | { type: "whisper_audio_start"; id: string; sampleRate: number }
   | { type: "whisper_audio_end"; id: string }
   | { type: "risk"; score: number }

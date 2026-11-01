@@ -19,7 +19,7 @@ from app.whisper import write_photo_query, write_whisper
 log = logging.getLogger(__name__)
 
 HISTORY_LINES = 12
-PHOTO_READY_WHISPER = "Photo's on your phone. Show them now."
+PHOTO_READY_WHISPER = "The photo's in your camera roll. Show them now."
 
 Listener = Callable[[dict], Awaitable[None]]
 

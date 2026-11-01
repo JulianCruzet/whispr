@@ -181,6 +181,12 @@ struct ContentView: View {
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
                     }
+                    if let notice = model.photoNotice {
+                        Text(notice)
+                            .font(Theme.body)
+                            .foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if model.lastPhotoSaved {
                         MetaText("saved to photos", color: Theme.up)
                     } else if model.tasks.last?.done == false {
