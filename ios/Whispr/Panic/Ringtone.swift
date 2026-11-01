@@ -1,12 +1,16 @@
 // PANIC (owner: Julian + Claude)
-// An original marimba-style ringtone, synthesized at runtime (apps can't use the
-// system ringtones), played out loud on the iPhone speaker so the other person hears
-// the phone ring even if the wearer has headphones on.
+// Plays the phone's own default ringtone out loud on the iPhone speaker, so the other
+// person hears it ring even if the wearer has headphones on. That file's path is
+// undocumented, so an original marimba-style ringtone, synthesized at runtime, stands in
+// if iOS won't let us read it.
 
 import AVFoundation
 
 final class Ringtone {
     private var player: AVAudioPlayer?
+
+    /// Reflection, the iOS default, which keeps its original file name.
+    private static let systemRingtone = URL(fileURLWithPath: "/Library/Ringtones/Opening.m4r")
 
     func start() {
         let session = AVAudioSession.sharedInstance()
@@ -15,7 +19,7 @@ final class Ringtone {
             try session.setActive(true)
             // Force the speaker even when Bluetooth headphones are connected.
             try session.overrideOutputAudioPort(.speaker)
-            let player = try AVAudioPlayer(data: Self.wav)
+            let player = try (try? AVAudioPlayer(contentsOf: Self.systemRingtone)) ?? AVAudioPlayer(data: Self.wav)
             player.numberOfLoops = -1
             player.volume = 1
             player.play()
