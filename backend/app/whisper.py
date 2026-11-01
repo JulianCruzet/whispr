@@ -1,7 +1,8 @@
 import anthropic
 
 from app.config import Settings
-from app.prompts import PHOTO_COMING_NOTE, PHOTO_QUERY_SYSTEM, WHISPER_SYSTEM
+from app.personas import DEFAULT_PERSONA, Persona
+from app.prompts import PHOTO_COMING_NOTE, photo_query_system, whisper_system
 
 MAX_WHISPER_WORDS = 15
 
@@ -42,16 +43,20 @@ async def write_whisper(
     settings: Settings,
     transcript: str,
     photo_coming: bool = False,
+    persona: Persona = DEFAULT_PERSONA,
 ) -> str | None:
     content = f"{transcript}\n\n{PHOTO_COMING_NOTE}" if photo_coming else transcript
-    text = await _complete(client, settings, WHISPER_SYSTEM, content)
+    text = await _complete(client, settings, whisper_system(persona), content)
     if not text:
         return None
     return cap_words(clean_line(text)) or None
 
 
 async def write_photo_query(
-    client: anthropic.AsyncAnthropic, settings: Settings, transcript: str
+    client: anthropic.AsyncAnthropic,
+    settings: Settings,
+    transcript: str,
+    persona: Persona = DEFAULT_PERSONA,
 ) -> str | None:
-    text = await _complete(client, settings, PHOTO_QUERY_SYSTEM, transcript)
+    text = await _complete(client, settings, photo_query_system(persona), transcript)
     return clean_line(text) or None if text else None

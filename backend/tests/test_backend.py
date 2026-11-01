@@ -386,6 +386,134 @@ def test_websocket_streams_events_and_reports_bad_messages():
             assert ws.receive_json()["type"] == "whisper"
 
 
+def run_with_persona(backend: Backend, persona_id: str, *lines: TranscriptIn) -> list[dict]:
+    async def go() -> list[dict]:
+        session = Session(backend.deps)
+        assert session.set_persona(persona_id)
+        events: list[dict] = []
+
+        async def collect(event: dict) -> None:
+            events.append(event)
+
+        session.listeners.add(collect)
+        for msg in lines:
+            await session.handle_transcript(msg)
+        while session.tasks:
+            await asyncio.gather(*session.tasks)
+        return events
+
+    return asyncio.run(go())
+
+
+def test_default_persona_is_the_fan():
+    backend = Backend()
+    run_line(backend, line())
+
+    assert "Scotiabank Arena" in backend.claude_requests[0]["system"]
+    assert "Scotiabank Arena" in backend.jev_requests[0]["state"]
+
+
+@pytest.mark.parametrize(
+    "persona_id, phrase",
+    [("interview", "mock interview"), ("first_date", "first date"), ("car_salesman", "used car")],
+)
+def test_persona_shapes_the_whisper_and_jev(persona_id, phrase):
+    backend = Backend()
+    run_with_persona(backend, persona_id, line("Tell me more?"))
+
+    assert phrase in backend.claude_requests[0]["system"]
+    assert "Scotiabank Arena" not in backend.claude_requests[0]["system"]
+    assert phrase in backend.jev_requests[0]["state"]
+
+
+def test_unknown_persona_is_rejected_and_keeps_the_current_one():
+    session = Session(Backend().deps)
+
+    assert session.set_persona("pirate") is False
+    assert session.persona.id == "fan"
+
+
+def test_changing_persona_clears_the_conversation():
+    session = Session(Backend().deps)
+    session.history.append({"speaker": "them", "text": "old scene"})
+
+    session.set_persona("fan")
+    assert len(session.history) == 1
+
+    session.set_persona("interview")
+    assert len(session.history) == 0
+
+
+def test_interview_never_looks_for_a_photo():
+    backend = Backend()
+    backend.jev = jev_response(task="find_photo")
+    events = run_with_persona(backend, "interview", line("Do you have a portfolio?"))
+
+    assert "task_started" not in types(events)
+
+
+def test_other_personas_never_get_the_laufey_photo(cached_photo):
+    backend = Backend()
+    backend.fail_search = True
+    backend.jev = jev_response(task="find_photo")
+    events = run_with_persona(backend, "first_date", line("Got pics of that place?"))
+
+    done = next(event for event in events if event["type"] == "task_done")
+    assert done["ok"] is False
+    assert PHOTO_READY_WHISPER not in [event.get("text") for event in events]
+
+
+def test_other_personas_still_get_searched_photos():
+    backend = Backend()
+    backend.jev = jev_response(task="find_photo")
+    events = run_with_persona(backend, "car_salesman", line("Got a picture of it?"))
+
+    done = next(event for event in events if event["type"] == "task_done")
+    assert done["image_url"] == IMAGE_URL
+    assert any("make and model" in r["system"] for r in backend.claude_requests)
+
+
+def test_websocket_sets_the_persona_and_rejects_unknown_ones():
+    backend = Backend()
+    with TestClient(create_app(backend.deps)) as client:
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({"type": "set_persona", "persona": "pirate"})
+            assert ws.receive_json()["type"] == "error"
+
+            ws.send_json({"type": "set_persona", "persona": "first_date"})
+            assert ws.receive_json() == {"type": "persona", "persona": "first_date"}
+
+            ws.send_json({"type": "transcript", "text": "Tell me about yourself?"})
+            assert ws.receive_json()["type"] == "transcript"
+            assert ws.receive_json()["type"] == "whisper"
+
+    assert "first date" in backend.claude_requests[0]["system"]
+
+
+def test_persona_outlives_a_reconnect_on_the_same_session():
+    backend = Backend()
+    with TestClient(create_app(backend.deps)) as client:
+        with client.websocket_connect("/ws?session_id=s1") as ws:
+            ws.send_json({"type": "set_persona", "persona": "interview"})
+            ws.receive_json()
+        client.post("/transcript", params={"session_id": "s1"}, json={"text": "Why this job?"})
+
+    assert "mock interview" in backend.claude_requests[0]["system"]
+
+
+def test_post_transcript_takes_a_persona():
+    backend = Backend()
+    with TestClient(create_app(backend.deps)) as client:
+        assert (
+            client.post("/transcript", params={"persona": "pirate"}, json={"text": "Hi?"}).status_code
+            == 422
+        )
+        response = client.post("/transcript", params={"persona": "car_salesman"}, json={"text": "Hi?"})
+
+    assert response.status_code == 200
+    assert "used car" in backend.claude_requests[0]["system"]
+
+
 def test_shared_token_is_enforced_when_set():
     backend = Backend(app_shared_token="secret")
     body = {"text": "Which show?"}

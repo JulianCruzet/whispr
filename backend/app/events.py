@@ -10,3 +10,8 @@ class TranscriptIn(BaseModel):
     speaker: str | None = None
     # Partial Scribe results are ignored; only committed lines reach Jev.
     is_final: bool = True
+
+
+class PersonaIn(BaseModel):
+    type: Literal["set_persona"]
+    persona: str
