@@ -82,6 +82,7 @@ final class AudioPipeline: @unchecked Sendable {
 
     func start(micSource: MicSource, voiceOutput: VoiceOutput) async throws {
         guard await AVAudioApplication.requestRecordPermission() else { throw AudioPipelineError.micPermissionDenied }
+        await MainActor.run { playbackOnly = false }
         self.micSource = micSource
         self.voiceOutput = voiceOutput
         try configureSession()
@@ -117,6 +118,7 @@ final class AudioPipeline: @unchecked Sendable {
 
     func stop() {
         running = false
+        playbackOnly = false
         for observer in [configObserver, interruptionObserver, routeObserver].compactMap({ $0 }) {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -150,13 +152,52 @@ final class AudioPipeline: @unchecked Sendable {
         }
     }
 
-    private func reclaimHeadphones() {
-        guard running, voiceOutput == .headphones, micSource == .airpods else { return }
+    /// `beforeWhisper`: also try the fix that sets the session up again, which itself changes
+    /// the route, so it's never run from the route-change notification (it could loop).
+    private func reclaimHeadphones(beforeWhisper: Bool = false) {
+        guard running || playbackOnly, voiceOutput == .headphones else { return }
         let session = AVAudioSession.sharedInstance()
         guard session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }),
               let headphones = session.availableInputs?.first(where: { $0.portType == .bluetoothHFP })
         else { return }
-        try? session.setPreferredInput(headphones)
+        if micSource == .airpods {
+            try? session.setPreferredInput(headphones)
+        } else if beforeWhisper {
+            // The iPhone mic listens, so the headphones play in high-quality mode, which no
+            // input choice selects; setting the session up again routes the voice back to them.
+            try? configureSession()
+        }
+    }
+
+    /// The audio engine runs just to play whispers, with the mic off (not listening).
+    private var playbackOnly = false
+    var isEngineRunning: Bool { engine.isRunning }
+
+    /// Right before a whisper plays (main thread): makes sure it will be heard. Without this
+    /// the voice could be silent when not listening (a Practice line), when the engine had
+    /// stopped without telling us, or when the voice had slipped onto the iPhone earpiece.
+    func prepareForWhisper(micSource: MicSource, voiceOutput: VoiceOutput) {
+        if !running {
+            guard !engine.isRunning else { return }
+            self.micSource = micSource
+            self.voiceOutput = voiceOutput
+            do {
+                try configureSession()
+                engine.prepare()
+                try engine.start()
+                playbackOnly = true
+                player.play()
+            } catch {
+                playbackOnly = false
+            }
+            return
+        }
+        if !engine.isRunning {
+            recover()
+            return
+        }
+        reclaimHeadphones(beforeWhisper: true)
+        if !player.isPlaying { player.play() }
     }
 
     // MARK: Whisper playback
