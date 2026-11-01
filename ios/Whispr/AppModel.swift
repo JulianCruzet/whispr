@@ -89,8 +89,7 @@ final class AppModel {
     var panicCallerName: String {
         didSet { UserDefaults.standard.set(panicCallerName, forKey: "panicCallerName") }
     }
-    /// Ring through CallKit if Whispr isn't on screen when the call comes in. While it's open
-    /// the app always draws the call itself, because iOS's screen takes over once you answer.
+    /// Real iOS call screen (CallKit). Off: our own full-screen call screen, which always shows full screen.
     var panicUsesCallKit: Bool {
         didSet { UserDefaults.standard.set(panicUsesCallKit, forKey: "panicUsesCallKit") }
     }
@@ -98,27 +97,14 @@ final class AppModel {
         didSet { UserDefaults.standard.set(panicDelaySeconds, forKey: "panicDelaySeconds") }
     }
 
-    /// This call is on CallKit, so iOS draws the banner and the pill.
-    private(set) var panicOnCallKit = false
-    /// The full-screen call is open rather than the banner or pill.
-    private var panicCallScreenOpen = false
-
+    /// Our own call screen is up. CallKit draws its own while ringing, but once answered
+    /// the call pill opens the app, so it has to land on the call.
     var showsFakeCallScreen: Bool {
         switch panic {
-        case .ringing, .inCall: panicCallScreenOpen
+        case .ringing: !panicUsesCallKit
+        case .inCall: true
         case .idle, .countdown: false
         }
-    }
-
-    /// The incoming-call banner is up.
-    var showsCallBanner: Bool {
-        panic == .ringing && !panicCallScreenOpen && !panicOnCallKit
-    }
-
-    /// When the call pill should show, the time the call was answered.
-    var callPillSince: Date? {
-        guard case let .inCall(since) = panic, !panicCallScreenOpen, !panicOnCallKit else { return nil }
-        return since
     }
 
     var backendURL: String {
@@ -282,15 +268,12 @@ final class AppModel {
         resumeListeningAfterPanic = listening
         if listening { stopListening() }
         panic = .ringing
-        panicCallScreenOpen = false
-        panicOnCallKit = panicUsesCallKit && UIApplication.shared.applicationState != .active
-        if panicOnCallKit {
+        if panicUsesCallKit {
             callKit.ring(from: panicCallerName) { [weak self] error in
                 guard let self, let error else { return }
-                // CallKit refused (e.g. Do Not Disturb): fall back to our own banner.
+                // CallKit refused (e.g. Do Not Disturb): fall back to our own screen.
                 self.lastError = "iOS call screen unavailable (\(error.localizedDescription)); using the built-in one."
                 self.panicUsesCallKit = false
-                self.panicOnCallKit = false
                 self.startRinging()
             }
         } else {
@@ -298,20 +281,9 @@ final class AppModel {
         }
     }
 
-    /// Answering from the banner stays in the pill. On CallKit the system pill opens the
-    /// app, so it has to land on the call.
     func answerFakeCall() {
         stopRinging()
-        if panicOnCallKit { panicCallScreenOpen = true }
         panic = .inCall(since: .now)
-    }
-
-    func openCallScreen() {
-        panicCallScreenOpen = true
-    }
-
-    func minimizeCallScreen() {
-        panicCallScreenOpen = false
     }
 
     func endFakeCall() {
@@ -319,8 +291,6 @@ final class AppModel {
         stopRinging()
         callKit.hangUp()
         panic = .idle
-        panicCallScreenOpen = false
-        panicOnCallKit = false
         if resumeListeningAfterPanic {
             resumeListeningAfterPanic = false
             Task { await startListening() }
