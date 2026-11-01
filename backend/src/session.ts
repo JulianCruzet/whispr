@@ -151,6 +151,10 @@ export class PhoneSession {
       this.scribe.setLineSilence(msg.alternate ? TURN_SILENCE_SECONDS : LINE_SILENCE_SECONDS);
       this.send({ type: "turn", next: this.turns?.next ?? null });
     }
+    if (msg.type === "audio_state") {
+      const state = !msg.engine ? "AUDIO STOPPED, not heard" : msg.listening ? "playing" : "playing, not listening";
+      console.log(`[${this.id.slice(0, 8)}] whisper audio: ${msg.route} (${state})`);
+    }
     if (msg.type === "flip_turn" && this.turns) {
       this.turns.next = this.turns.next === "me" ? "them" : "me";
       this.send({ type: "turn", next: this.turns.next });

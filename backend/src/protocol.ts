@@ -27,6 +27,8 @@ export type ClientMessage =
   | { type: "set_turns"; alternate: boolean }
   /** Turn-taking slipped: swap who is next. */
   | { type: "flip_turn" }
+  /** Where the phone is playing a whisper, sent as each one starts (for the log). */
+  | { type: "audio_state"; route: string; engine: boolean; listening: boolean }
   | { type: "ping" };
 
 // ---------- backend -> phone (and dashboards) ----------

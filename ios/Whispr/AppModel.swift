@@ -483,7 +483,13 @@ final class AppModel {
             if let url { Task { await savePhoto(url) } }
         case let .whisperAudioStart(id, sampleRate):
             audio.setPlaybackSampleRate(Double(sampleRate))
+            audio.prepareForWhisper(micSource: micSource, voiceOutput: voiceOutput)
             speaking = true
+            route = AudioPipeline.routeDescription()
+            // So the backend log shows where each whisper played, if one is ever not heard.
+            client.send(json: [
+                "type": "audio_state", "route": route, "engine": audio.isEngineRunning, "listening": listening,
+            ])
             if waitingWhispers[id] != nil {
                 audio.markPlayback { [weak self] in Task { @MainActor in self?.showWhisper(id) } }
             }
