@@ -35,6 +35,8 @@ export class Brain {
   async onTurn(text: string, speaker: Speaker): Promise<void> {
     const turn: Turn = { speaker, text, at: Date.now() };
     this.history.push(turn);
+    // Never coach the wearer on their own line.
+    if (speaker === "me") return;
 
     const decision = await decide(this.history, turn);
     this.out.send({ type: "risk", score: decision.risk });
