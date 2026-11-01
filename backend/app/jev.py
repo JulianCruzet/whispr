@@ -27,6 +27,10 @@ QUESTIONS = {
         "criteria": {
             "me": "The wearer, the person telling the cover story",
             "them": "The other person, the one asking about or reacting to the story",
+            "background": (
+                "Nobody in this conversation: a TV, a passer-by, a different conversation "
+                "nearby, or noise misheard as words"
+            ),
         },
     },
     "launch_task": {
@@ -50,6 +54,8 @@ QUESTIONS = {
 class Decision:
     should_whisper: float
     who_spoke: str
+    # How sure Jev is of who_spoke, 0-1 (None if it didn't say).
+    who_spoke_p: float | None
     launch_task: str
     launch_probability: float
     cover_blown_risk: float  # Normalized to 0-1.
@@ -66,9 +72,12 @@ async def decide(http: httpx.AsyncClient, settings: Settings, state: str) -> Dec
     answers = response.json()["answers"]
 
     task = answers["launch_task"]
+    who = answers["who_spoke"]
+    who_p = (who.get("probabilities") or {}).get(who["choice"])
     return Decision(
         should_whisper=answers["should_whisper"]["noul"],
-        who_spoke=answers["who_spoke"]["choice"],
+        who_spoke=who["choice"],
+        who_spoke_p=float(who_p) if who_p is not None else None,
         launch_task=task["choice"],
         launch_probability=task["probabilities"][task["choice"]],
         cover_blown_risk=answers["cover_blown_risk"]["score"] / (len(RISK_LEVELS) - 1),

@@ -41,7 +41,8 @@ ElevenLabs Scribe realtime doesn't label speakers, so the gateway takes a **voic
 - **While sampling the other person,** lines that might be the wearer (prompting them, say) are left out of their sample and go through as `me`, at most two.
 - **A line holding both voices** (a quick back-and-forth Scribe committed as one) is split at the word where the voice changes, and sent as two turns.
 - **Only the wearer calibrated:** each line is scored by how far it is from the wearer's voice: close → `me`, clearly another voice → `them`, in between → `unknown`. It leans to `unknown` rather than risk calling the wearer `them`. A line with no voiceprint falls back to loudness (within 8 dB of the wearer is `me`).
-- **Not calibrated, or `unknown`:** the brain's Jev decides from the words.
+- **Not calibrated, or `unknown`:** the brain's Jev decides from the words. Lines Jev is at least 80% sure about teach the gateway that voice, so after a few lines each, voices are placed by sound even with no calibration.
+- **Background:** if Jev is at least 60% sure an unplaced line isn't part of this conversation (a TV, a passer-by), it's dropped: no whisper, and it's kept out of the story. Lines that are only Scribe noise tags (`(background noise)`, `[music]`) never reach the brain.
 - Lines from `me` never get a whisper.
 
 `npx tsx scripts/eval-speakers.ts <dir> <VoiceA> <VoiceB>` scores two recorded voices at equal loudness (see the script for the file layout).

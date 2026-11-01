@@ -22,11 +22,11 @@ from app.whisper import MAX_SPOKEN_WORDS, cap_words, clean_cue, clean_line, writ
 IMAGE_URL = "https://img.example/laufey.jpg"
 
 
-def jev_response(should_whisper=0.95, who="them", task="none", task_p=0.9, risk=1.5):
+def jev_response(should_whisper=0.95, who="them", task="none", task_p=0.9, risk=1.5, who_p=0.9):
     return {
         "answers": {
             "should_whisper": {"type": "noul", "noul": should_whisper},
-            "who_spoke": {"type": "choice", "choice": who},
+            "who_spoke": {"type": "choice", "choice": who, "probabilities": {who: who_p}},
             "launch_task": {"type": "choice", "choice": task, "probabilities": {task: task_p}},
             "cover_blown_risk": {"type": "score", "score": risk},
         }
@@ -274,6 +274,41 @@ def test_cooldown_limits_whispers():
     events = run_line(backend, line("First?"), line("Second?"))
 
     assert types(events).count("whisper") == 1
+
+
+def test_a_background_line_is_dropped_without_a_whisper():
+    backend = Backend()
+    backend.jev = jev_response(who="background", who_p=0.8)
+    events = run_line(backend, line("Breaking news tonight on channel five"))
+
+    assert types(events) == ["transcript"]
+    assert events[0]["who_spoke"] == "background"
+
+
+def test_an_unsure_background_call_is_kept():
+    backend = Backend()
+    backend.jev = jev_response(who="background", who_p=0.4)
+    events = run_line(backend, line())
+
+    assert events[0]["who_spoke"] == "unknown"
+
+
+def test_jev_never_drops_a_line_the_voice_already_placed():
+    backend = Backend()
+    backend.jev = jev_response(who="background", who_p=0.95)
+    events = run_line(backend, line(speaker="them"))
+
+    assert types(events) == ["transcript", "whisper"]
+    assert events[0]["who_spoke"] == "them"
+
+
+def test_jevs_confidence_goes_back_with_the_verdict():
+    backend = Backend()
+    backend.jev = jev_response(who="me", who_p=0.92)
+    events = run_line(backend, line())
+
+    assert events[0]["who_spoke"] == "me"
+    assert events[0]["who_spoke_p"] == pytest.approx(0.92)
 
 
 def test_partial_transcripts_are_ignored():

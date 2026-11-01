@@ -105,7 +105,7 @@ export class SpeakerModel {
     return { speaker: "unknown", position: null, how: "none" };
   }
 
-  /** True if `print` sounds like `who`'s sample (false if there's no sample of `who`). */
+    /** True if `print` sounds like `who`'s sample (false if there's no sample of `who`). */
   soundsLike(who: Who, print: Voiceprint): boolean {
     const sample = this.samples[who];
     return sample !== null && distance(print, sample) <= SAME_VOICE;
@@ -229,3 +229,7 @@ export function distance(print: Voiceprint, sample: Voiceprint): number {
   return count ? Math.sqrt(sum / count) : Infinity;
 }
 
+/** True unless two prints are clearly different voices. */
+export function couldBeSameVoice(a: Voiceprint, b: Voiceprint): boolean {
+  return distance(a, b) < MAYBE_SAME_VOICE;
+}
