@@ -13,8 +13,8 @@ export type ClientMessage =
   | { type: "hello"; device: string; sampleRate: number }
   /** Pretend someone said `text` (skips Scribe). For testing and as a demo fallback. */
   | { type: "debug_turn"; text: string; speaker?: Speaker }
-  /** The next line spoken is the wearer: learn how loud their voice is in the mic. */
-  | { type: "calibrate" }
+  /** The next line spoken is `who` (default "me"): learn what their voice sounds like. */
+  | { type: "calibrate"; who?: "me" | "them" }
   /** Who the wearer is playing: fan, interview, first_date or car_salesman. Default: fan. */
   | { type: "set_persona"; persona: string }
   | { type: "ping" };
@@ -40,6 +40,6 @@ export type ServerEvent =
       caption?: string;
       emailed?: boolean;
     }
-  | { type: "calibrated"; ok: boolean; levelDb?: number }
+  | { type: "calibrated"; who: "me" | "them"; ok: boolean }
   | { type: "error"; message: string }
   | { type: "pong" };

@@ -4,13 +4,12 @@ import { randomUUID } from "node:crypto";
 import type { WebSocket } from "ws";
 import { BrainLink, type BrainEvent } from "./brainLink.js";
 import { config } from "./config.js";
-import { ScribeSession } from "./ears/scribe.js";
+import { ScribeSession, type Segment } from "./ears/scribe.js";
+import { SpeakerModel, splitBySpeaker, type Who } from "./ears/speakers.js";
+import { voiceprint } from "./ears/voiceprint.js";
 import { cacheImage } from "./media.js";
 import type { ClientMessage, ServerEvent, Speaker } from "./protocol.js";
 import { speak, TTS_SAMPLE_RATE } from "./voice/tts.js";
-
-/** How much quieter than the wearer a line must be to count as the other person. */
-const ME_MARGIN_DB = 8;
 
 /** Dashboards (mission-control screens) get a copy of every event. */
 export const dashboards = new Set<WebSocket>();
@@ -24,9 +23,10 @@ export class PhoneSession {
   readonly id = randomUUID();
   private scribe = new ScribeSession();
   private brain = new BrainLink(this.id);
-  /** How loud the wearer's own voice is in the mic, learned by "calibrate". */
-  private myLevelDb: number | null = null;
-  private calibrating = false;
+  /** Tells the wearer from the other person, from samples taken by "calibrate". */
+  private speakers = new SpeakerModel();
+  /** Whose voice the next finished line is a sample of, if calibrating. */
+  private calibrating: Who | null = null;
   /** Lines sent to the brain and not yet echoed back, to match its verdict to our transcript id. */
   private pendingLines: { id: string; text: string; speaker: Speaker }[] = [];
   /** Whispers are spoken one after another, never over each other. */
@@ -45,18 +45,7 @@ export class PhoneSession {
     this.scribe.on("partial", (text) =>
       this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" }),
     );
-    this.scribe.on("committed", (text, levelDb) => {
-      if (this.calibrating) {
-        this.calibrating = false;
-        if (levelDb != null) this.myLevelDb = levelDb;
-        this.send({ type: "calibrated", ok: levelDb != null, levelDb: levelDb ?? undefined });
-        this.onTurn(text, "me");
-        return;
-      }
-      const speaker = this.classify(levelDb);
-      console.log(`[${this.id.slice(0, 8)}] ${speaker} (${levelDb?.toFixed(1) ?? "?"} dB): ${text}`);
-      this.onTurn(text, speaker);
-    });
+    this.scribe.on("committed", (text, segment) => this.onCommitted(text, segment));
     this.scribe.on("error", (message) => this.send({ type: "error", message }));
 
     this.brain.on("event", (event) => {
@@ -99,14 +88,47 @@ export class PhoneSession {
     }
     if (msg.type === "ping") this.send({ type: "pong" });
     if (msg.type === "debug_turn" && msg.text) this.onTurn(msg.text, msg.speaker ?? "them");
-    if (msg.type === "calibrate") this.calibrating = true;
+    if (msg.type === "calibrate") this.calibrating = msg.who === "them" ? "them" : "me";
     if (msg.type === "set_persona" && msg.persona) this.brain.setPersona(msg.persona);
   }
 
-  /** Lines within a few dB of the wearer's calibrated level are theirs; quieter ones are the other person. */
-  private classify(levelDb: number | null): Speaker {
-    if (levelDb == null || this.myLevelDb == null) return "unknown";
-    return levelDb >= this.myLevelDb - ME_MARGIN_DB ? "me" : "them";
+  private onCommitted(text: string, segment: Segment | null) {
+    const tag = `[${this.id.slice(0, 8)}]`;
+    const printOf = (from: number, to: number) => {
+      const audio = this.scribe.audioBetween(from, to);
+      return audio ? voiceprint(audio) : null;
+    };
+    const words = segment?.words.length ? segment.words : null;
+    const print = words ? printOf(words[0].start, words[words.length - 1].end) : null;
+    const levelDb = segment?.levelDb ?? null;
+
+    if (this.calibrating) {
+      const who = this.calibrating;
+      this.calibrating = null;
+      const ok = this.speakers.calibrate(who, print, levelDb);
+      console.log(`${tag} calibrated ${who}: ${ok ? `${print?.seconds.toFixed(1) ?? "?"}s of speech` : "failed"}`);
+      this.send({ type: "calibrated", who, ok });
+      this.onTurn(text, who);
+      return;
+    }
+
+    // A quick back-and-forth can arrive as one line: split it where the voice changes.
+    const parts = words ? splitBySpeaker(words, printOf, this.speakers) : null;
+    if (parts) {
+      console.log(`${tag} split by voice: ${parts.map((p) => `${p.speaker}: ${p.text}`).join(" | ")}`);
+      for (const part of parts) this.onTurn(part.text, part.speaker);
+      return;
+    }
+
+    const verdict = this.speakers.classify(print, levelDb);
+    const why =
+      verdict.how === "voice"
+        ? `voice ${verdict.position?.toFixed(2)}, ${print?.seconds.toFixed(1)}s`
+        : verdict.how === "loudness"
+          ? `loudness ${levelDb?.toFixed(1)} dB`
+          : "not calibrated";
+    console.log(`${tag} ${verdict.speaker} (${why}): ${text}`);
+    this.onTurn(text, verdict.speaker);
   }
 
   private onTurn(text: string, speaker: Speaker) {

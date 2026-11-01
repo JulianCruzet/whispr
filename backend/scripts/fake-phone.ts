@@ -4,6 +4,7 @@
 //   npx tsx scripts/fake-phone.ts "wait, you saw Laufey live?"
 //   npx tsx scripts/fake-phone.ts --wav sample-16k-mono.wav
 //   npx tsx scripts/fake-phone.ts --calibrate --wav conversation.wav   (first line spoken = you)
+//   npx tsx scripts/fake-phone.ts --calibrate-both --wav conversation.wav   (first line = you, second = them)
 //
 // Env: WHISPR_URL (default ws://localhost:8787/ws)
 
@@ -12,8 +13,9 @@ import WebSocket from "ws";
 
 const url = process.env.WHISPR_URL ?? "ws://localhost:8787/ws";
 const rawArgs = process.argv.slice(2);
-const calibrate = rawArgs.includes("--calibrate");
-const args = rawArgs.filter((a) => a !== "--calibrate");
+const calibrateBoth = rawArgs.includes("--calibrate-both");
+const calibrate = calibrateBoth || rawArgs.includes("--calibrate");
+const args = rawArgs.filter((a) => a !== "--calibrate" && a !== "--calibrate-both");
 const wavIndex = args.indexOf("--wav");
 const wavPath = wavIndex >= 0 ? args[wavIndex + 1] : null;
 const line = (wavIndex >= 0 ? args.filter((_, i) => i !== wavIndex && i !== wavIndex + 1) : args).join(" ");
@@ -44,6 +46,10 @@ ws.on("message", (data, isBinary) => {
     return;
   }
   const event = JSON.parse(data.toString());
+  // After the wearer's sample, the next line is the other person's.
+  if (calibrateBoth && event.type === "calibrated" && event.who === "me") {
+    ws.send(JSON.stringify({ type: "calibrate", who: "them" }));
+  }
   if (event.type === "whisper_audio_end") {
     console.log(`${ms()} whisper_audio_end (${audioBytes} bytes of audio)`);
     audioBytes = 0;
