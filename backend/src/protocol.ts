@@ -19,6 +19,8 @@ export type ClientMessage =
   | { type: "calibrate"; who?: "me" | "them"; seconds?: number }
   /** Forget both voice samples (calibrated or learnt), e.g. before a demo with new people. */
   | { type: "clear_calibration" }
+  /** Stop a calibration in progress without keeping anything (the app's page was closed). */
+  | { type: "cancel_calibration" }
   /** Who the wearer is playing: fan, interview, first_date or car_salesman. Default: fan. */
   | { type: "set_persona"; persona: string }
   | { type: "ping" };

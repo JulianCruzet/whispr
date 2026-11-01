@@ -362,7 +362,25 @@ describe("calibration", () => {
     assert.ok(progress[0].seconds < 6 && progress[1].seconds >= 6, `progress ${progress.map((p) => p.seconds)}`);
     assert.equal(progress[1].target, 6);
     assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", who: "me", ok: true });
-    assert.ok(phone.events("transcript").every((t) => t.speaker === "me"));
+  });
+
+  test("nothing said during calibration reaches the conversation or gets a whisper", async () => {
+    const lines = ["calibrating me now", "hi, I'm Kim, testing"];
+    brain.reply = (msg) =>
+      lines.includes(msg.text as string)
+        ? [{ type: "whisper", id: "nope", text: "Say nope.", reason: "reply", cover_blown_risk: null }]
+        : [];
+    const { phone, session } = voiceSession();
+    phone.say({ type: "calibrate", who: "me" });
+    speakInto(session, lines[0], speak(ALEX, 6.4, 80));
+    phone.say({ type: "calibrate", who: "them" });
+    speakInto(session, lines[1], speak(KIM, 5.4, 81));
+    assert.deepEqual(phone.events("calibrated").map((e) => e.ok), [true, true]);
+    await new Promise((r) => setTimeout(r, 300));
+
+    assert.ok(!brain.received.some((m) => lines.includes(m.text as string)), "the brain never hears it");
+    assert.equal(phone.events("transcript").length, 0, "not in the conversation on screen");
+    assert.equal(phone.events("whisper").length, 0);
   });
 
   test("their sample skips lines in the wearer's voice, then both voices are told apart", async () => {
@@ -381,15 +399,13 @@ describe("calibration", () => {
     speakInto(session, "so did you see the show?", speak(KIM, 2.5, 6));
     speakInto(session, "yeah, it was great", speak(ALEX, 2.5, 7));
     // Earlier tests' lines can still be landing at the brain, so pick out this test's.
+    // Calibration lines never reach it; the conversation after it is told apart by voice.
     const lines = ["hey, I'm Alex", "go on, say something", "hi, I'm Kim, what's up", "so did you see the show?", "yeah, it was great"];
     const heard = () => brain.received.filter((m) => lines.includes(m.text as string));
-    await until(() => heard().length === lines.length);
+    await until(() => heard().length === 2);
     assert.deepEqual(
       heard().map((m) => [m.text, m.speaker]),
       [
-        ["hey, I'm Alex", "me"],
-        ["go on, say something", "me"],
-        ["hi, I'm Kim, what's up", "them"],
         ["so did you see the show?", "them"],
         ["yeah, it was great", "me"],
       ],
@@ -458,6 +474,18 @@ describe("calibration", () => {
 
     const again = voiceSession("phone-clear");
     assert.equal(again.phone.events("calibrated").length, 0);
+  });
+
+  test("cancelling a step mid-way keeps nothing, and talk is conversation again", async () => {
+    brain.reply = () => [];
+    const { phone, session } = voiceSession();
+    phone.say({ type: "calibrate", who: "me", seconds: 15 });
+    speakInto(session, "half a calibration", speak(ALEX, 3, 90));
+    phone.say({ type: "cancel_calibration" });
+    speakInto(session, "back to the conversation", speak(ALEX, 2, 91));
+    assert.equal(phone.events("calibrated").length, 0);
+    await until(() => brain.received.some((m) => m.text === "back to the conversation"));
+    assert.ok(!brain.received.some((m) => m.text === "half a calibration"));
   });
 
   test("gives up after 4 lines without enough speech", async () => {

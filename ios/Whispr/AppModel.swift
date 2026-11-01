@@ -357,6 +357,13 @@ final class AppModel {
         if who == .them { skippedThem = false }
     }
 
+    /// Stops a calibration step in progress (its page was closed) without keeping anything.
+    func cancelCalibration() {
+        guard case .sampling = calibration else { return }
+        client.send(json: ["type": "cancel_calibration"])
+        calibration = .none
+    }
+
     /// Forgets both voices, calibrated or learnt, so new people can calibrate from scratch.
     func clearCalibration() {
         client.send(json: ["type": "clear_calibration"])
