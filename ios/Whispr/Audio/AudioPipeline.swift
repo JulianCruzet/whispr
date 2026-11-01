@@ -1,7 +1,7 @@
 // EARS & VOICE (owner: Julian + Claude)
 // Captures the conversation as PCM16 mono 16 kHz for the backend, and plays the
-// whisper audio (PCM16 mono) that streams back, into the headphones, or out of the
-// iPhone's top or bottom speaker when none are connected.
+// whisper audio (PCM16 mono) that streams back, into the headphones or out of the
+// iPhone's top or main speaker.
 
 import AVFoundation
 
@@ -16,15 +16,23 @@ enum MicSource: String, CaseIterable, Identifiable {
     var label: String { self == .airpods ? "Headphones mic" : "iPhone mic" }
 }
 
-/// Where whispers play when no headphones are connected.
-enum PhoneOutput: String, CaseIterable, Identifiable {
+/// Where whispers play.
+enum VoiceOutput: String, CaseIterable, Identifiable {
+    /// Bluetooth headphones, or the top speaker while none are connected.
+    case headphones
     /// The earpiece at the top of the phone: quiet, so only the wearer hears it.
     case topSpeaker
     /// The loudspeaker: the other person hears it too.
     case speaker
 
     var id: String { rawValue }
-    var label: String { self == .topSpeaker ? "Top speaker" : "iPhone speaker" }
+    var label: String {
+        switch self {
+        case .headphones: "Headphones"
+        case .topSpeaker: "Top speaker"
+        case .speaker: "iPhone speaker"
+        }
+    }
 }
 
 enum AudioPipelineError: LocalizedError {
@@ -51,7 +59,7 @@ final class AudioPipeline: @unchecked Sendable {
     private var pendingMic = Data()
     private var playbackCarry: UInt8?
     private var micSource: MicSource = .airpods
-    private var phoneOutput: PhoneOutput = .topSpeaker
+    private var voiceOutput: VoiceOutput = .headphones
     /// When the whisper queued on the speaker finishes. Touched by both audio threads.
     private var speakerWhisperEndsAt = Date.distantPast
     private let whisperLock = NSLock()
@@ -66,10 +74,10 @@ final class AudioPipeline: @unchecked Sendable {
         engine.connect(player, to: engine.mainMixerNode, format: playerFormat)
     }
 
-    func start(micSource: MicSource, phoneOutput: PhoneOutput) async throws {
+    func start(micSource: MicSource, voiceOutput: VoiceOutput) async throws {
         guard await AVAudioApplication.requestRecordPermission() else { throw AudioPipelineError.micPermissionDenied }
         self.micSource = micSource
-        self.phoneOutput = phoneOutput
+        self.voiceOutput = voiceOutput
         try configureSession()
         try startEngine()
 
@@ -166,16 +174,20 @@ final class AudioPipeline: @unchecked Sendable {
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        var options: AVAudioSession.CategoryOptions = [.allowBluetoothA2DP]
-        if micSource == .airpods { options.insert(.allowBluetoothHFP) }
-        // Only applies with no headphones connected; they still take priority.
-        if phoneOutput == .speaker { options.insert(.defaultToSpeaker) }
+        // Leaving Bluetooth out of the speaker options keeps the voice on the phone
+        // even if headphones are connected.
+        let options: AVAudioSession.CategoryOptions
+        switch voiceOutput {
+        case .headphones: options = micSource == .airpods ? [.allowBluetoothHFP, .allowBluetoothA2DP] : [.allowBluetoothA2DP]
+        case .topSpeaker: options = []
+        case .speaker: options = [.defaultToSpeaker]
+        }
         try session.setCategory(.playAndRecord, mode: .default, options: options)
         try session.setActive(true)
 
         // Picking the input also picks the output: choosing the headphones' mic
         // pulls the whisper onto the headphones instead of the iPhone earpiece.
-        let wanted: AVAudioSession.Port = micSource == .airpods ? .bluetoothHFP : .builtInMic
+        let wanted: AVAudioSession.Port = voiceOutput == .headphones && micSource == .airpods ? .bluetoothHFP : .builtInMic
         if let input = session.availableInputs?.first(where: { $0.portType == wanted }) {
             try session.setPreferredInput(input)
         }

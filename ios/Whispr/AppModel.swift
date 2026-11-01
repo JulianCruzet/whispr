@@ -136,9 +136,9 @@ final class AppModel {
         }
     }
 
-    var phoneOutput: PhoneOutput {
+    var voiceOutput: VoiceOutput {
         didSet {
-            UserDefaults.standard.set(phoneOutput.rawValue, forKey: "phoneOutput")
+            UserDefaults.standard.set(voiceOutput.rawValue, forKey: "voiceOutput")
             if listening { Task { await restartListening() } }
         }
     }
@@ -163,7 +163,7 @@ final class AppModel {
             ?? Bundle.main.object(forInfoDictionaryKey: "WhisprBackendURL") as? String
             ?? "ws://localhost:8787/ws"
         micSource = MicSource(rawValue: UserDefaults.standard.string(forKey: "micSource") ?? "") ?? .airpods
-        phoneOutput = PhoneOutput(rawValue: UserDefaults.standard.string(forKey: "phoneOutput") ?? "") ?? .topSpeaker
+        voiceOutput = VoiceOutput(rawValue: UserDefaults.standard.string(forKey: "voiceOutput") ?? "") ?? .headphones
         persona = Persona(rawValue: UserDefaults.standard.string(forKey: "persona") ?? "") ?? .fan
         panicCallerName = UserDefaults.standard.string(forKey: "panicCallerName") ?? "Mom"
         panicUsesCallKit = UserDefaults.standard.bool(forKey: "panicUsesCallKit")
@@ -241,7 +241,7 @@ final class AppModel {
 
     func startListening() async {
         do {
-            try await audio.start(micSource: micSource, phoneOutput: phoneOutput)
+            try await audio.start(micSource: micSource, voiceOutput: voiceOutput)
             listening = true
             lastError = nil
             // Before the conversation starts, so the Photos prompt never interrupts it.
