@@ -23,7 +23,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `whisper_audio_start` `{id, sampleRate}` → binary frames → `whisper_audio_end` `{id}`: the spoken whisper, PCM16 mono at `sampleRate` (24 kHz) |
 | text | `risk` `{score}`: 0..1, how close you are to getting caught |
 | text | `task_started` `{id, kind, label}`: e.g. finding a photo |
-| text | `task_done` `{id, kind, ok, imageUrl?, caption?, emailed?}` |
+| text | `task_done` `{id, kind, ok, imageUrl?, caption?}`: `imageUrl` normally points at this gateway (`/media/<id>`), which downloads the photo so the phone never hits a host that blocks it. If the gateway couldn't fetch it, it's the original address |
 | text | `calibrated` `{ok, levelDb?}`: reply to `calibrate` once the wearer's line arrives |
 | text | `error` `{message}`, `pong` |
 
