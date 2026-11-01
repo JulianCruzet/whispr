@@ -8,7 +8,7 @@ struct WhisprApp: App {
         WindowGroup {
             ContentView()
                 .environment(model)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(.light)
         }
     }
 }
