@@ -163,14 +163,17 @@ export interface TimedWord {
   end: number;
 }
 
-/** Words are classified in runs of at least this long; a speaker change needs this much on each side. */
-const SPLIT_CHUNK_SECONDS = 1;
-const SPLIT_MIN_RUN_SECONDS = 0.8;
+/** A speaker change needs at least this much talking on each side of it. */
+const SPLIT_MIN_SIDE_SECONDS = 0.6;
+/** ...and the two sides this far apart between the voices (0 = the wearer, 1 = them). */
+const SPLIT_MIN_GAP = 0.45;
 
 /**
  * Scribe sometimes commits a quick back-and-forth as one line. When both voices are
- * calibrated, this classifies the line in ~1 s pieces and, if it clearly switches
- * speaker, returns it split at the word where the switch happens. Otherwise null.
+ * calibrated, this tries every word boundary, voiceprints everything on each side, and
+ * splits where the two sides are confidently different voices. Each side then has all
+ * its audio to go on, so a quick "yeah" before a long answer is caught too. It looks
+ * again inside each side, for me-them-me. Returns null if the line is one voice.
  */
 export function splitBySpeaker(
   words: TimedWord[],
@@ -178,42 +181,59 @@ export function splitBySpeaker(
   model: SpeakerModel,
 ): { text: string; speaker: Who }[] | null {
   if (!model.calibrated.me || !model.calibrated.them || words.length < 2) return null;
-  if (words[words.length - 1].end - words[0].start < 2 * SPLIT_MIN_RUN_SECONDS) return null;
+  const turns = splitTurns(words, printOf, model, 2);
+  if (!turns || turns.length < 2) return null;
+  // Neighbours with the same voice become one turn.
+  const merged: { words: TimedWord[]; speaker: Who }[] = [];
+  for (const turn of turns) {
+    const last = merged[merged.length - 1];
+    if (last && last.speaker === turn.speaker) last.words.push(...turn.words);
+    else merged.push({ words: [...turn.words], speaker: turn.speaker });
+  }
+  if (merged.length < 2) return null;
+  return merged.map((turn) => ({ text: turn.words.map((w) => w.text).join(" "), speaker: turn.speaker }));
+}
 
-  // Group words into ~1 s chunks and label each one.
-  const chunks: { words: TimedWord[]; speaker: Speaker }[] = [];
-  let current: TimedWord[] = [];
-  for (const word of words) {
-    current.push(word);
-    if (word.end - current[0].start >= SPLIT_CHUNK_SECONDS) {
-      chunks.push({ words: current, speaker: "unknown" });
-      current = [];
+function splitTurns(
+  words: TimedWord[],
+  printOf: (from: number, to: number) => Voiceprint | null,
+  model: SpeakerModel,
+  depth: number,
+): { words: TimedWord[]; speaker: Who }[] | null {
+  const at = bestSplit(words, printOf, model);
+  if (!at) return null;
+  const sides: [TimedWord[], Who][] = [
+    [words.slice(0, at.index), at.left],
+    [words.slice(at.index), at.right],
+  ];
+  return sides.flatMap(([side, speaker]) => {
+    const inner = depth > 1 ? splitTurns(side, printOf, model, depth - 1) : null;
+    return inner ?? [{ words: side, speaker }];
+  });
+}
+
+/** The word boundary where the two sides sound most clearly like different people, if any. */
+function bestSplit(
+  words: TimedWord[],
+  printOf: (from: number, to: number) => Voiceprint | null,
+  model: SpeakerModel,
+): { index: number; left: Who; right: Who } | null {
+  let best: { index: number; left: Who; right: Who } | null = null;
+  let bestGap = SPLIT_MIN_GAP;
+  const first = words[0].start;
+  const last = words[words.length - 1].end;
+  for (let i = 1; i < words.length; i++) {
+    if (words[i - 1].end - first < SPLIT_MIN_SIDE_SECONDS || last - words[i].start < SPLIT_MIN_SIDE_SECONDS) continue;
+    const left = model.classify(printOf(first, words[i - 1].end), null, { learn: false });
+    const right = model.classify(printOf(words[i].start, last), null, { learn: false });
+    if (left.speaker === "unknown" || right.speaker === "unknown" || left.speaker === right.speaker) continue;
+    const gap = Math.abs(left.position! - right.position!);
+    if (gap > bestGap) {
+      bestGap = gap;
+      best = { index: i, left: left.speaker, right: right.speaker };
     }
   }
-  if (current.length) chunks.push({ words: current, speaker: "unknown" });
-  for (const chunk of chunks) {
-    const from = chunk.words[0].start;
-    const to = chunk.words[chunk.words.length - 1].end;
-    chunk.speaker = model.classify(printOf(from, to), null, { learn: false }).speaker;
-  }
-
-  // Merge neighbours with the same label; an unsure chunk joins the run before it.
-  const runs: { words: TimedWord[]; speaker: Speaker }[] = [];
-  for (const chunk of chunks) {
-    const last = runs[runs.length - 1];
-    if (last && (chunk.speaker === last.speaker || chunk.speaker === "unknown")) last.words.push(...chunk.words);
-    else runs.push({ words: [...chunk.words], speaker: chunk.speaker });
-  }
-  if (runs.length > 1 && runs[0].speaker === "unknown") {
-    runs[1].words.unshift(...runs[0].words);
-    runs.shift();
-  }
-
-  const confident = runs.every(
-    (run) => run.speaker !== "unknown" && run.words[run.words.length - 1].end - run.words[0].start >= SPLIT_MIN_RUN_SECONDS,
-  );
-  if (runs.length < 2 || !confident) return null;
-  return runs.map((run) => ({ text: run.words.map((w) => w.text).join(" "), speaker: run.speaker as Who }));
+  return best;
 }
 
 /**
