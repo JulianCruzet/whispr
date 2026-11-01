@@ -25,14 +25,14 @@
   <p><em>Watch the demo on YouTube</em></p>
 </div>
 
-You're bluffing being a Laufey fan with a *real* Laufey fan.
+You're bluffing being a Drake fan with a *real* Drake fan.
 
 | | What happens |
 |---|---|
-| **They ask** | "Wait, you saw her live? Which show?" |
-| **Your earpiece whispers** | *"Say you saw her at Massey Hall. Say the Bewitched tour was unreal"* |
+| **They ask** | "Wait, you saw him live? Which show?" |
+| **Your earpiece whispers** | *"Say you caught Drake at the Scotiabank Arena during the Views tour"* |
 | **They want proof** | "Do you have any pictures from that night?" |
-| **Your earpiece buys time** | *"Say the Massey Hall one was unreal. Say give me a sec"* An agent is already looking for a photo in the background |
+| **Your earpiece buys time** | *"Say the Drake show was at the Scotiabank Arena and you're pulling it up now"* An agent is already looking for a photo in the background |
 | **The proof lands** | *"Photo's on your phone. Show them now."* It's on screen and in your camera roll |
 | **They push too hard** | Tap **Panic**. Your phone rings with a fake call. *"Sorry, I have to take this."* |
 
@@ -196,10 +196,10 @@ npm test                     # gateway
 Test without talking, also from `backend/`:
 
 ```bash
-npx tsx scripts/fake-phone.ts "wait, you saw Laufey live?"            # typed line as "them"
+npx tsx scripts/fake-phone.ts "wait, you saw Drake live?"             # typed line as "them"
 npx tsx scripts/fake-phone.ts --calibrate --wav conversation.wav       # 16 kHz mono WAV, first line = you
 curl -X POST localhost:8000/transcript -H 'content-type: application/json' \
-  -d '{"text":"wait, you saw Laufey live?","speaker":"them"}'          # brain only
+  -d '{"text":"wait, you saw Drake live?","speaker":"them"}'           # brain only
 ```
 
 ### iOS app
@@ -255,7 +255,7 @@ render.yaml                  the two Render services
 
 ## ⚠️ Disclaimer
 
-Whispr is a lighthearted improv game for playing with friends. Whispered details are made up, and proof photos come from the web and belong to their owners. Not affiliated with Laufey or any artist, venue or brand mentioned.
+Whispr is a lighthearted improv game for playing with friends. Whispered details are made up, and proof photos come from the web and belong to their owners. Not affiliated with Drake or any artist, venue or brand mentioned.
 
 ## 👥 Team
 
