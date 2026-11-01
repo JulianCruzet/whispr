@@ -48,6 +48,8 @@ cp .env.example .env     # fill in the keys you have
 
 The first run sets up a Python venv and `npm install`. Details on the brain, its tests and its message format: [backend/README.md](backend/README.md).
 
+Automated tests: `npm test` (gateway) and `.venv/bin/python -m pytest` (brain), both from `backend/`.
+
 Test without talking:
 
 ```bash
