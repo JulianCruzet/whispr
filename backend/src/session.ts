@@ -5,7 +5,7 @@ import type { WebSocket } from "ws";
 import { BrainLink, type BrainEvent } from "./brainLink.js";
 import { config } from "./config.js";
 import { ScribeSession, type Segment } from "./ears/scribe.js";
-import { SpeakerModel, splitBySpeaker, type TimedWord, type Who } from "./ears/speakers.js";
+import { couldBeSameVoice, SpeakerModel, splitBySpeaker, type TimedWord, type Who } from "./ears/speakers.js";
 import { voiceprint, type Voiceprint } from "./ears/voiceprint.js";
 import { cacheImage } from "./media.js";
 import type { ClientMessage, ServerEvent, Speaker } from "./protocol.js";
@@ -19,6 +19,10 @@ const CALIBRATION_TARGET_SECONDS: Record<Who, number> = { me: 4, them: 3 };
 /** ...and gives up after this many lines, keeping the sample if it has at least the minimum. */
 const CALIBRATION_MAX_LINES = 4;
 const CALIBRATION_MIN_SECONDS = 1.5;
+/** Without calibration, lines Jev is at least this sure about teach the gateway that voice. */
+const LEARN_MIN_P = 0.8;
+/** Noise Scribe writes out instead of words, like "(background noise)" or "[music]". */
+const NOISE_TAGS = /\([^)]*\)|\[[^\]]*\]/g;
 /** Each phone's voice samples, kept across reconnects (a tunnel blip shouldn't mean recalibrating). */
 const savedSpeakers = new Map<string, SpeakerModel>();
 
@@ -39,7 +43,12 @@ export class PhoneSession {
   /** Calibration in progress: whose voice, and the audio collected from their lines so far. */
   private calibrating: { who: Who; audio: Buffer[]; lines: number; skipped: number; levels: number[] } | null = null;
   /** Lines sent to the brain and not yet echoed back, to match its verdict to our transcript id. */
-  private pendingLines: { id: string; text: string; speaker: Speaker }[] = [];
+  /** Lines waiting for Jev's verdict; `audio` is kept for unplaced lines, to learn the voice. */
+  private pendingLines: { id: string; text: string; speaker: Speaker; audio: Buffer | null }[] = [];
+  /** Uncalibrated voices, learnt from lines Jev is sure about (see `learnVoice`). */
+  private learning: Record<Who, Buffer[]> = { me: [], them: [] };
+  /** Lines in a row that didn't match the voice being learnt; two mean the start was wrong. */
+  private learningMisses: Record<Who, number> = { me: 0, them: 0 };
   /** Whispers are spoken one after another, never over each other. */
   private speech: Promise<void> = Promise.resolve();
   /**
@@ -165,6 +174,14 @@ export class PhoneSession {
 
   private onCommitted(text: string, segment: Segment | null) {
     const tag = `[${this.id.slice(0, 8)}]`;
+    // Scribe writes noise out as tags; a line that's only noise isn't anyone talking.
+    const spoken = text.replace(NOISE_TAGS, " ").replace(/\s+/g, " ").trim();
+    if (!/[a-z0-9]/i.test(spoken)) {
+      console.log(`${tag} ignored noise: ${text}`);
+      return;
+    }
+    text = spoken;
+    if (segment) segment = { ...segment, words: segment.words.filter((w) => !/[()[\]]/.test(w.text)) };
     const printOf = (from: number, to: number) => {
       const audio = this.scribe.audioBetween(from, to);
       return audio ? voiceprint(audio) : null;
@@ -194,13 +211,42 @@ export class PhoneSession {
           ? `loudness ${levelDb?.toFixed(1)} dB`
           : "not calibrated";
     console.log(`${tag} ${verdict.speaker} (${why}): ${text}`);
-    this.onTurn(text, verdict.speaker);
+    const audio = verdict.speaker === "unknown" && words ? this.scribe.audioBetween(words[0].start, words[words.length - 1].end) : null;
+    this.onTurn(text, verdict.speaker, audio);
   }
 
-  private onTurn(text: string, speaker: Speaker) {
+  /**
+   * Without calibration, learns a voice from lines Jev is sure about: once there's as much
+   * speech as calibration would take, it becomes that voice's sample.
+   */
+  private learnVoice(who: Who, audio: Buffer) {
+    if (this.calibrating || this.speakers.calibrated[who]) return;
+    const print = voiceprint(audio);
+    if (!print || print.seconds < 1) return;
+    // The other person's voice must not catch the wearer's.
+    if (who === "them" && this.speakers.couldBe("me", print)) return;
+    const sofar = this.learning[who].length ? voiceprint(Buffer.concat(this.learning[who])) : null;
+    if (sofar && sofar.seconds >= CALIBRATION_MIN_SECONDS && !couldBeSameVoice(print, sofar)) {
+      // Two misses in a row: the lines learnt so far were probably the wrong voice.
+      if (++this.learningMisses[who] < 2) return;
+      this.learning[who] = [];
+    }
+    this.learningMisses[who] = 0;
+    this.learning[who].push(audio);
+    const sample = voiceprint(Buffer.concat(this.learning[who]));
+    if (!sample || sample.seconds < CALIBRATION_TARGET_SECONDS[who]) return;
+    const lines = this.learning[who].length;
+    this.learning[who] = [];
+    if (who === "them" && this.speakers.soundsLike("me", sample)) return;
+    if (this.speakers.calibrate(who, sample, null)) {
+      console.log(`[${this.id.slice(0, 8)}] learnt ${who}'s voice from ${lines} lines Jev was sure of (${sample.seconds.toFixed(1)}s)`);
+    }
+  }
+
+  private onTurn(text: string, speaker: Speaker, audio: Buffer | null = null) {
     const id = randomUUID();
     this.send({ type: "transcript", id, text, final: true, speaker });
-    this.pendingLines.push({ id, text, speaker });
+    this.pendingLines.push({ id, text, speaker, audio });
     if (this.pendingLines.length > 20) this.pendingLines.shift();
     this.brain.sendTurn(text, speaker);
   }
@@ -214,7 +260,9 @@ export class PhoneSession {
         const verdict = event.who_spoke;
         if (line && line.speaker === "unknown" && (verdict === "me" || verdict === "them")) {
           this.send({ type: "transcript", id: line.id, text: line.text, final: true, speaker: verdict });
+          if (line.audio && (event.who_spoke_p ?? 0) >= LEARN_MIN_P) this.learnVoice(verdict, line.audio);
         }
+        if (verdict === "background") console.log(`[${this.id.slice(0, 8)}] background, ignored: ${event.text}`);
         if (event.cover_blown_risk != null) this.send({ type: "risk", score: event.cover_blown_risk });
         return;
       }

@@ -276,6 +276,17 @@ describe("photo-ready alert", () => {
   });
 });
 
+describe("noise", () => {
+  test("a line that's only noise tags is dropped; tags in a real line are stripped", async () => {
+    brain.reply = () => [];
+    const { phone, session } = voiceSession();
+    speakInto(session, "(background noise)", speak(ALEX, 1, 50));
+    speakInto(session, "[music] (laughs)", speak(ALEX, 1, 51));
+    speakInto(session, "(laughs) yeah, totally", speak(ALEX, 1.5, 52));
+    assert.deepEqual(phone.events("transcript").map((t) => t.text), ["yeah, totally"]);
+  });
+});
+
 describe("what goes in the ear", () => {
   test("the short cue is spoken while the full line goes to the screen", async () => {
     const { config } = await import("../src/config.js");
@@ -290,7 +301,8 @@ describe("what goes in the ear", () => {
       return new Response(new Uint8Array(480));
     }) as typeof fetch;
     try {
-      brain.reply = () => [
+      // Only this test's line: earlier tests' lines can still be landing at the brain.
+      brain.reply = (msg) => msg.text !== "how was the show?" ? [] : [
         {
           type: "whisper",
           id: "line",
@@ -382,6 +394,30 @@ describe("calibration", () => {
         ["yeah, it was great", "me"],
       ],
     );
+  });
+
+  test("without calibration, learns both voices from the lines Jev is sure about", async () => {
+    // Jev knows from the words who said what; the gateway learns each voice from that.
+    const jevSays: Record<string, string> = {};
+    brain.reply = (msg) =>
+      msg.type === "transcript" && jevSays[msg.text as string]
+        ? [{ type: "transcript", text: msg.text, who_spoke: jevSays[msg.text as string], who_spoke_p: 0.95, cover_blown_risk: null }]
+        : [];
+    const { phone, session } = voiceSession();
+    const say = async (text: string, who: "me" | "them", pcm: Buffer) => {
+      jevSays[text] = who;
+      speakInto(session, text, pcm);
+      await until(() => phone.events("transcript").some((t) => t.text === text && t.speaker === who));
+    };
+    for (let i = 0; i < 3; i++) await say(`I was there, line ${i}`, "me", speak(ALEX, 2.4, 20 + i));
+    for (let i = 0; i < 2; i++) await say(`no way, line ${i}`, "them", speak(KIM, 2.4, 30 + i));
+
+    speakInto(session, "it was loud", speak(ALEX, 2.4, 40));
+    speakInto(session, "which song?", speak(KIM, 2.4, 41));
+    await until(() => brain.received.some((m) => m.text === "which song?"));
+    const placed = (text: string) => brain.received.find((m) => m.text === text)?.speaker;
+    assert.equal(placed("it was loud"), "me", "placed by voice, before Jev");
+    assert.equal(placed("which song?"), "them");
   });
 
   test("gives up after 4 lines without enough speech", async () => {

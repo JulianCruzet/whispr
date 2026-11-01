@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 HISTORY_LINES = 12
 PHOTO_READY_WHISPER = "The photo's in your camera roll. Show them now."
 PHOTO_READY_SPOKEN = "Photo found. It's in your camera roll."
+# Jev must be at least this sure a line is background before it's dropped.
+BACKGROUND_MIN_P = 0.6
 
 Listener = Callable[[dict], Awaitable[None]]
 
@@ -95,13 +97,34 @@ class Session:
             )
             return
 
-        who_spoke = msg.speaker if msg.speaker in ("me", "them") else decision.who_spoke
+        trusted = msg.speaker in ("me", "them")
+        # A line the gateway couldn't place by voice that Jev is sure isn't part of this
+        # conversation (a TV, a passer-by) is dropped: no whisper, and kept out of the story.
+        if (
+            not trusted
+            and decision.who_spoke == "background"
+            and (decision.who_spoke_p or 0) >= BACKGROUND_MIN_P
+        ):
+            self.history.remove(line)
+            await self.emit(
+                {"type": "transcript", "text": text, "who_spoke": "background", "who_spoke_p": decision.who_spoke_p, "cover_blown_risk": None}
+            )
+            return
+
+        if trusted:
+            who_spoke = msg.speaker
+        elif decision.who_spoke in ("me", "them"):
+            who_spoke = decision.who_spoke
+        else:
+            who_spoke = "unknown"
         line["speaker"] = who_spoke
         await self.emit(
             {
                 "type": "transcript",
                 "text": text,
                 "who_spoke": who_spoke,
+                # The gateway learns voices from lines Jev is sure about.
+                "who_spoke_p": None if trusted else decision.who_spoke_p,
                 "cover_blown_risk": decision.cover_blown_risk,
             }
         )

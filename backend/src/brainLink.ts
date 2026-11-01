@@ -8,7 +8,8 @@ import { config } from "./config.js";
 import type { Speaker } from "./protocol.js";
 
 export type BrainEvent =
-  | { type: "transcript"; text: string; who_spoke: string | null; cover_blown_risk: number | null }
+  /** `who_spoke` is "me", "them", "unknown" or "background"; `who_spoke_p` is Jev's confidence in it. */
+  | { type: "transcript"; text: string; who_spoke: string | null; who_spoke_p?: number | null; cover_blown_risk: number | null }
   /** `text` is shown on the phone; `spoken` (a few words) is said in the ear. */
   | { type: "whisper"; id: string; text: string; spoken?: string; reason: "reply" | "task_done"; cover_blown_risk: number | null }
   | { type: "task_started"; task_id: string; task: string }
