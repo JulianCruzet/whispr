@@ -54,8 +54,19 @@ final class AppModel {
     /// Current audio route, e.g. "Mic: WH-1000XM5 · Voice: WH-1000XM5".
     var route = ""
 
-    enum Calibration: Equatable { case none, listening, done, failed }
-    /// Whether the backend has learned the wearer's voice level (so it can tell "me" from "them").
+    /// Calibration takes a voice sample of the wearer, then of the other person, so the
+    /// backend can tell them apart by voice. The second step can be skipped.
+    enum Calibration: Equatable {
+        case none
+        /// Waiting for a sentence from this person.
+        case sampling(Speaker)
+        /// The wearer's sample is in; ask for the other person's.
+        case needThem
+        /// This person's sentence was too short or quiet to use.
+        case failed(Speaker)
+        /// Both samples, or the wearer's only (then the backend falls back to loudness).
+        case done(bothVoices: Bool)
+    }
     var calibration: Calibration = .none
 
     var lastPhoto: UIImage?
@@ -307,9 +318,15 @@ final class AppModel {
         client.send(json: ["type": "set_persona", "persona": persona.rawValue])
     }
 
-    func calibrate() {
-        client.send(json: ["type": "calibrate"])
-        calibration = .listening
+    /// The next sentence `who` says becomes their voice sample.
+    func calibrate(_ who: Speaker) {
+        client.send(json: ["type": "calibrate", "who": who == .them ? "them" : "me"])
+        calibration = .sampling(who)
+    }
+
+    /// Carry on with only the wearer's sample.
+    func skipCalibratingThem() {
+        calibration = .done(bothVoices: false)
     }
 
     /// Pretend the other person said `text` (skips speech-to-text). For testing and demo fallback.
@@ -355,8 +372,13 @@ final class AppModel {
         case let .whisperAudioStart(_, sampleRate):
             audio.setPlaybackSampleRate(Double(sampleRate))
             speaking = true
-        case let .calibrated(ok, _):
-            calibration = ok ? .done : .failed
+        case let .calibrated(who, ok):
+            let speaker: Speaker = who == "them" ? .them : .me
+            if !ok {
+                calibration = .failed(speaker)
+            } else {
+                calibration = speaker == .me ? .needThem : .done(bothVoices: true)
+            }
         case let .error(message):
             lastError = message
         case .whisperAudioEnd:

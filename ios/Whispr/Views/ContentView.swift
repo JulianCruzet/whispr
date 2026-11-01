@@ -94,24 +94,38 @@ struct ContentView: View {
 
     @ViewBuilder private var calibration: some View {
         switch model.calibration {
-        case .none, .failed:
+        case .none:
             Button {
-                model.calibrate()
+                model.calibrate(.me)
             } label: {
-                Label(model.calibration == .failed ? "Didn't catch that. Try again" : "Calibrate my voice",
-                      systemImage: "person.wave.2")
+                Label("Calibrate voices", systemImage: "person.2.wave.2")
             }
             .buttonStyle(PillButtonStyle(kind: .quiet))
-        case .listening:
-            HStack(spacing: 10) {
-                Image(systemName: "waveform")
-                Text("Say one sentence in your normal voice")
+        case let .failed(who):
+            Button {
+                model.calibrate(who)
+            } label: {
+                Label(who == .me ? "Didn't catch you. Try again" : "Didn't catch them. Try again",
+                      systemImage: "arrow.clockwise")
             }
-            .font(.body.weight(.medium))
-            .foregroundStyle(Theme.graphite)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background(Capsule().strokeBorder(Theme.stone, lineWidth: 1))
+            .buttonStyle(PillButtonStyle(kind: .quiet))
+        case let .sampling(who):
+            CalibrationPrompt(
+                step: who == .me ? "1 of 2" : "2 of 2",
+                text: who == .me ? "Say one sentence in your normal voice" : "Have them say one sentence"
+            )
+        case .needThem:
+            HStack(spacing: 10) {
+                Button {
+                    model.calibrate(.them)
+                } label: {
+                    Label("Now their voice", systemImage: "person.wave.2")
+                }
+                .buttonStyle(PillButtonStyle(kind: .quiet))
+                Button("Skip") { model.skipCalibratingThem() }
+                    .buttonStyle(PillButtonStyle(kind: .secondary))
+                    .frame(width: 92)
+            }
         case .done:
             EmptyView()
         }
@@ -349,3 +363,24 @@ private struct TranscriptRow: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.stone).frame(height: 0.5) }
     }
 }
+
+/// The calibration step in progress: which sentence we're waiting for.
+private struct CalibrationPrompt: View {
+    let step: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "waveform")
+            Text(text)
+            Spacer(minLength: 0)
+            LabelText(step)
+        }
+        .font(.body.weight(.medium))
+        .foregroundStyle(Theme.graphite)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 15)
+        .background(Capsule().strokeBorder(Theme.stone, lineWidth: 1))
+    }
+}
+
