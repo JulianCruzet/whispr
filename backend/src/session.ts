@@ -1,8 +1,8 @@
-// One connected phone: mic audio in -> Scribe -> Brain -> TTS -> whisper audio out.
+// One connected phone: mic audio in -> Scribe -> brain (Python) -> TTS -> whisper audio out.
 
 import { randomUUID } from "node:crypto";
 import type { WebSocket } from "ws";
-import { Brain } from "./brain/index.js";
+import { BrainLink, type BrainEvent } from "./brainLink.js";
 import { config } from "./config.js";
 import { ScribeSession } from "./ears/scribe.js";
 import type { ClientMessage, ServerEvent, Speaker } from "./protocol.js";
@@ -22,17 +22,16 @@ export function broadcast(event: ServerEvent) {
 export class PhoneSession {
   readonly id = randomUUID();
   private scribe = new ScribeSession();
-  readonly brain: Brain;
+  private brain = new BrainLink(this.id);
   /** How loud the wearer's own voice is in the mic, learned by "calibrate". */
   private myLevelDb: number | null = null;
   private calibrating = false;
+  /** Lines sent to the brain and not yet echoed back, to match its verdict to our transcript id. */
+  private pendingLines: { id: string; text: string; speaker: Speaker }[] = [];
+  /** Whispers are spoken one after another, never over each other. */
+  private speech: Promise<void> = Promise.resolve();
 
   constructor(private ws: WebSocket) {
-    this.brain = new Brain({
-      send: (event) => this.send(event),
-      say: (id, text) => this.say(id, text),
-    });
-
     this.scribe.on("partial", (text) =>
       this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" }),
     );
@@ -50,6 +49,12 @@ export class PhoneSession {
     });
     this.scribe.on("error", (message) => this.send({ type: "error", message }));
 
+    this.brain.on("event", (event) => this.onBrainEvent(event));
+    this.brain.on("offline", (message) => {
+      console.warn(message);
+      this.send({ type: "error", message: "Brain offline. Is the Python service running?" });
+    });
+
     let heardAudio = false;
     ws.on("message", (data, isBinary) => {
       if (isBinary) {
@@ -60,16 +65,15 @@ export class PhoneSession {
         this.onJson(data.toString());
       }
     });
-    ws.on("close", () => this.scribe.close());
+    ws.on("close", () => {
+      this.scribe.close();
+      this.brain.close();
+    });
 
     this.send({
       type: "ready",
       sessionId: this.id,
-      integrations: {
-        elevenlabs: !!config.elevenlabs.apiKey,
-        jev: !!config.jev.apiKey,
-        anthropic: !!config.anthropic.apiKey,
-      },
+      integrations: { elevenlabs: !!config.elevenlabs.apiKey },
     });
   }
 
@@ -92,8 +96,53 @@ export class PhoneSession {
   }
 
   private onTurn(text: string, speaker: Speaker) {
-    this.send({ type: "transcript", id: randomUUID(), text, final: true, speaker });
-    void this.brain.onTurn(text, speaker).catch((err) => this.fail(err));
+    const id = randomUUID();
+    this.send({ type: "transcript", id, text, final: true, speaker });
+    this.pendingLines.push({ id, text, speaker });
+    if (this.pendingLines.length > 20) this.pendingLines.shift();
+    this.brain.sendTurn(text, speaker);
+  }
+
+  private onBrainEvent(event: BrainEvent) {
+    switch (event.type) {
+      case "transcript": {
+        // The brain echoes each line with Jev's verdict on who said it.
+        const index = this.pendingLines.findIndex((line) => line.text === event.text.trim());
+        const line = index >= 0 ? this.pendingLines.splice(index, 1)[0] : null;
+        const verdict = event.who_spoke;
+        if (line && line.speaker === "unknown" && (verdict === "me" || verdict === "them")) {
+          this.send({ type: "transcript", id: line.id, text: line.text, final: true, speaker: verdict });
+        }
+        if (event.cover_blown_risk != null) this.send({ type: "risk", score: event.cover_blown_risk });
+        return;
+      }
+      case "whisper":
+        // Its risk score is the same decision already sent with the transcript echo.
+        this.send({ type: "whisper", id: event.id, text: event.text });
+        this.speech = this.speech.then(() => this.say(event.id, event.text));
+        return;
+      case "task_started":
+        this.send({
+          type: "task_started",
+          id: event.task_id,
+          kind: event.task === "find_photo" ? "find_photo" : "look_up_fact",
+          label: event.task === "find_photo" ? "Finding a photo…" : "Looking it up…",
+        });
+        return;
+      case "task_done":
+        this.send({
+          type: "task_done",
+          id: event.task_id,
+          kind: event.task === "find_photo" ? "find_photo" : "look_up_fact",
+          ok: event.ok,
+          imageUrl: event.image_url,
+          caption: event.title ?? event.query,
+        });
+        return;
+      case "error":
+        this.send({ type: "error", message: `Brain rejected a message: ${JSON.stringify(event.detail)}` });
+        return;
+    }
   }
 
   send(event: ServerEvent) {

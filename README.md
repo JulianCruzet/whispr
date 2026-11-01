@@ -6,18 +6,18 @@ Built at LarpHacks 2026 (Nov 1, UofT). Submission cutoff: **6:00 PM**.
 
 ## How it works
 
+Two backend services in `backend/`, one `.env`:
+
 ```
-iPhone app (SwiftUI)                         backend (Node + TS, on Render)
-  mic ──PCM16 16 kHz──► WebSocket /ws ──►  ears/scribe.ts   ElevenLabs Scribe realtime
-                                                │ committed turn
-                                                ▼
-                                           brain/index.ts
-                                             ├─ brain/jev.ts       Jev: whisper? task? risk?
-                                             ├─ brain/whisper.ts   Claude Haiku 5.5: the line
-                                             └─ tasks/             photo search + Agentboxd email
-                                                │
-  AirPods ◄──PCM16 24 kHz── WebSocket ◄──  voice/tts.ts     ElevenLabs Flash TTS
-  screen  ◄──JSON events──────────────────  (also mirrored to /ws/dashboard)
+iPhone app (SwiftUI)              audio gateway (Node, src/, :8787)           brain (Python, app/, :8000)
+  mic ─PCM16 16 kHz─► /ws ──►  ears/scribe.ts   ElevenLabs Scribe
+                                 │ finished line + me/them (loudness)
+                                 └──────────────── /ws ─────────────────►  Jev: who spoke? whisper? task?
+                                                                            Claude Haiku 5.5: the line
+                                                                            photo search (Brave) + fallback
+                                 ┌──────── whisper / task events ◄───────┘
+  headphones ◄─PCM16 24 kHz─  voice/tts.ts     ElevenLabs Flash TTS (one whisper at a time)
+  screen ◄─JSON events──────  (also mirrored to /ws/dashboard)
 ```
 
 The full message format is in [docs/protocol.md](docs/protocol.md).
@@ -26,8 +26,8 @@ The full message format is in [docs/protocol.md](docs/protocol.md).
 
 | Area | Owner | Files |
 |---|---|---|
-| **Ears & voice**: mic capture, Scribe, TTS, AirPods playback | Julian | `ios/Whispr/Audio/`, `backend/src/ears/`, `backend/src/voice/` |
-| **Brain & tasks**: Jev, whisper prompt, photo search, Agentboxd | Person B | `backend/src/brain/`, `backend/src/tasks/` |
+| **Ears & voice**: mic capture, Scribe, TTS, headphone playback, gateway | Julian | `ios/Whispr/Audio/`, `backend/src/` |
+| **Brain & tasks**: Jev, whisper prompt, photo search | Person B | `backend/app/`, `backend/tests/` |
 | **Face & stage**: app UI, dashboard, Render deploy, demo script | Person C | `ios/Whispr/Views/`, `backend/` dashboard, `render.yaml` |
 
 Stay in your folders and conflicts stay rare. `protocol.ts` / `Protocol.swift` are shared: change them in a small PR of their own.
@@ -42,17 +42,19 @@ Stay in your folders and conflicts stay rare. `protocol.ts` / `Protocol.swift` a
 
 ```bash
 cd backend
-cp .env.example .env     # fill in the keys you have; missing ones run in mock mode
-npm install
-npm run dev              # http://localhost:8787
+cp .env.example .env     # fill in the keys you have
+./scripts/dev.sh         # brain on :8000 + gateway on :8787 (Ctrl+C stops both)
 ```
 
-Every integration falls back to a mock when its key is missing, so you can build without keys.
+The first run sets up a Python venv and `npm install`. Details on the brain, its tests and its message format: [backend/README.md](backend/README.md).
 
-Test the brain with no audio:
+Test without talking:
 
 ```bash
-curl -X POST localhost:8787/debug/turn -d '{"text":"wait, you saw Laufey live?","speaker":"them"}'
+npx tsx scripts/fake-phone.ts "wait, you saw Laufey live?"            # typed line as "them"
+npx tsx scripts/fake-phone.ts --calibrate --wav conversation.wav       # 16 kHz mono WAV, first line = you
+curl -X POST localhost:8000/transcript -H 'content-type: application/json' \
+  -d '{"text":"wait, you saw Laufey live?","speaker":"them"}'          # brain only
 ```
 
 ## iOS app
@@ -73,5 +75,4 @@ Re-run `xcodegen` after adding or removing Swift files. In Xcode, pick your team
 | `ELEVENLABS_API_KEY` | ElevenLabs Discord → coupon-codes → LarpHacks coupon |
 | `JEV_API_KEY` | console.typesafe.ai |
 | `ANTHROPIC_API_KEY` | console.anthropic.com |
-| `SERPAPI_KEY` | serpapi.com |
-| `AGENTBOXD_API_KEY` | agentboxd, redeem `LARPHACKS-2026` |
+| `BRAVE_SEARCH_API_KEY` | brave.com/search/api (photo search; without it the cached photo is used) |

@@ -2,6 +2,13 @@ import "dotenv/config";
 
 const env = (key: string, fallback = "") => process.env[key]?.trim() || fallback;
 
+/** Where the brain (Python service) listens. On Render, BRAIN_HOSTPORT comes from the brain service. */
+function brainUrl(): string {
+  if (env("BRAIN_URL")) return env("BRAIN_URL");
+  if (env("BRAIN_HOSTPORT")) return `ws://${env("BRAIN_HOSTPORT")}/ws`;
+  return "ws://localhost:8000/ws";
+}
+
 export const config = {
   port: Number(env("PORT", "8787")),
 
@@ -11,34 +18,13 @@ export const config = {
     ttsModel: env("ELEVENLABS_TTS_MODEL", "eleven_flash_v2_5"),
   },
 
-  jev: {
-    apiKey: env("JEV_API_KEY"),
-  },
-
-  anthropic: {
-    apiKey: env("ANTHROPIC_API_KEY"),
-    whisperModel: env("WHISPER_MODEL", "claude-haiku-5-5"),
-  },
-
-  tasks: {
-    serpApiKey: env("SERPAPI_KEY"),
-    agentboxdApiKey: env("AGENTBOXD_API_KEY"),
-    agentboxdInbox: env("AGENTBOXD_INBOX"),
-    photoEmailTo: env("PHOTO_EMAIL_TO"),
-    fallbackPhotoUrl: env("FALLBACK_PHOTO_URL"),
+  brain: {
+    url: brainUrl(),
+    /** Same as the brain's APP_SHARED_TOKEN, if it requires one. */
+    token: env("APP_SHARED_TOKEN"),
   },
 };
 
-/** Logs which integrations are live vs. running in mock mode. */
 export function logIntegrations() {
-  const status = (on: boolean) => (on ? "live" : "mock");
-  console.log(
-    [
-      `ElevenLabs: ${status(!!config.elevenlabs.apiKey)}`,
-      `Jev: ${status(!!config.jev.apiKey)}`,
-      `Anthropic: ${status(!!config.anthropic.apiKey)}`,
-      `SerpAPI: ${status(!!config.tasks.serpApiKey)}`,
-      `Agentboxd: ${status(!!config.tasks.agentboxdApiKey)}`,
-    ].join(" | "),
-  );
+  console.log(`ElevenLabs: ${config.elevenlabs.apiKey ? "live" : "mock"} | brain: ${config.brain.url}`);
 }

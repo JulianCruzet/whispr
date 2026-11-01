@@ -139,7 +139,12 @@ final class AppModel {
         case let .transcript(id, text, final, speaker):
             if final {
                 partial = ""
-                lines.append(TranscriptLine(id: id, text: text, speaker: speaker))
+                // The same id again means the brain decided who said it; update the label.
+                if let i = lines.firstIndex(where: { $0.id == id }) {
+                    lines[i].speaker = speaker
+                } else {
+                    lines.append(TranscriptLine(id: id, text: text, speaker: speaker))
+                }
             } else {
                 partial = text
             }
