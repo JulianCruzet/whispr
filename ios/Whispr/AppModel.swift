@@ -50,6 +50,8 @@ final class AppModel {
     var currentWhisper: String?
     /// The short cue Whispr says in the ear for currentWhisper, shown big so what's heard is on screen.
     var currentCue: String?
+    /// Lines whose audio hasn't reached the ear yet, by whisper id (see `showWhisper`).
+    private var waitingWhispers: [String: (text: String, spoken: String?)] = [:]
     /// "The photo's in your camera roll…", shown with the proof photo.
     var photoNotice: String?
     /// Whispr's voice is streaming into the wearer's ear right now.
@@ -355,6 +357,13 @@ final class AppModel {
         vibrationTask = nil
     }
 
+    /// Puts a waiting line on the card (once; later calls for it do nothing).
+    private func showWhisper(_ id: String) {
+        guard let line = waitingWhispers.removeValue(forKey: id) else { return }
+        currentWhisper = line.text
+        currentCue = line.spoken
+    }
+
     private func sendTurns() {
         client.send(json: ["type": "set_turns", "alternate": takeTurns])
     }
@@ -440,13 +449,23 @@ final class AppModel {
             } else {
                 partial = text
             }
-        case let .whisper(_, text, spoken, reason):
+        case let .whisper(id, text, spoken, reason):
             // The photo alert goes with the photo; the line the wearer is saying stays put.
             if reason == "photo_ready" {
                 photoNotice = text
             } else {
-                currentWhisper = text
-                currentCue = spoken
+                // The card shows a line when its audio starts in the ear, so it always matches
+                // what's heard, even while an earlier line is still playing. With nothing
+                // playing it shows at once; if its audio never comes, it shows after 8 s anyway.
+                waitingWhispers[id] = (text, spoken)
+                if !speaking && !audio.isPlayingWhisper {
+                    showWhisper(id)
+                } else {
+                    Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(8))
+                        self?.showWhisper(id)
+                    }
+                }
             }
         case let .risk(score):
             risk = score
@@ -462,9 +481,12 @@ final class AppModel {
                 tasks[i].imageUrl = url
             }
             if let url { Task { await savePhoto(url) } }
-        case let .whisperAudioStart(_, sampleRate):
+        case let .whisperAudioStart(id, sampleRate):
             audio.setPlaybackSampleRate(Double(sampleRate))
             speaking = true
+            if waitingWhispers[id] != nil {
+                audio.markPlayback { [weak self] in Task { @MainActor in self?.showWhisper(id) } }
+            }
         case let .calibrating(who, seconds, target):
             let speaker: Speaker = who == "them" ? .them : .me
             if case .sampling(speaker, _, _) = calibration {
