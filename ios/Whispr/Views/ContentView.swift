@@ -1,116 +1,194 @@
 import SwiftUI
 
-/// Mission screen. Person C owns the look; keep it readable from across a table.
+/// Mission screen. Read at a glance mid-conversation: the line to say is the biggest thing on it.
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showSettings = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                whisperCard
+        VStack(spacing: 18) {
+            header
+            cueCard
+            if model.listening {
+                CoverMeter(risk: model.risk)
                 calibrationBanner
-                transcript
-                tasks
-                listenButton
             }
-            .padding()
-            .navigationTitle("Whispr")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { connectionDot }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                }
+            transcript
+            proof
+            controls
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(PinstripeBackground())
+        .preferredColorScheme(.dark)
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .fullScreenCover(isPresented: .constant(model.showsFakeCallScreen)) { FakeCallView() }
+        .overlay(alignment: .top) { panicCountdown }
+        .onAppear { if model.connection == .disconnected { model.connect() } }
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Whispr")
+                    .font(Theme.display(34, relativeTo: .largeTitle))
+                    .foregroundStyle(Theme.chalk)
+                TicketText("Playing · \(model.persona.label)")
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
-            .fullScreenCover(isPresented: .constant(model.showsFakeCallScreen)) { FakeCallView() }
-            .overlay(alignment: .top) { panicCountdown }
-            .onAppear { if model.connection == .disconnected { model.connect() } }
+            Spacer()
+            ConnectionTag(connection: model.connection)
+            Button {
+                showSettings = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.title3)
+                    .foregroundStyle(Theme.brass)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Settings")
         }
     }
 
-    private var whisperCard: some View {
-        Text(model.currentWhisper ?? "Waiting for your cue…")
-            .font(.title2.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 120)
-            .padding()
-            .background(.indigo.opacity(0.25), in: RoundedRectangle(cornerRadius: 16))
+    // MARK: The lining: the line to say
+
+    private var cueCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                WovenLabel(text: "In your ear")
+                Spacer()
+                if model.speaking {
+                    VoiceBars(animated: !reduceMotion)
+                        .transition(.opacity)
+                }
+            }
+            Group {
+                if let whisper = model.currentWhisper {
+                    Text(whisper)
+                        .font(Theme.display(29))
+                        .foregroundStyle(Theme.chalk)
+                        .id(whisper)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
+                } else {
+                    Text(model.listening ? "Listening. Your next line shows up here." : "Start listening when the conversation begins.")
+                        .font(Theme.displayItalic(22))
+                        .foregroundStyle(Theme.chalk.opacity(0.55))
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(22)
+        .background(LiningBackground())
+        .animation(.easeOut(duration: 0.35), value: model.currentWhisper)
+        .animation(.easeOut(duration: 0.2), value: model.speaking)
+        .accessibilityElement(children: .combine)
     }
+
+    // MARK: Calibration
+
+    @ViewBuilder private var calibrationBanner: some View {
+        switch model.calibration {
+        case .none, .failed:
+            Button {
+                model.calibrate()
+            } label: {
+                Label(model.calibration == .failed ? "Didn't catch that. Try again" : "Calibrate my voice",
+                      systemImage: "person.wave.2")
+            }
+            .buttonStyle(BrassButtonStyle(filled: false))
+        case .listening:
+            HStack(spacing: 10) {
+                Image(systemName: "waveform")
+                Text("Say one sentence in your normal voice")
+            }
+            .font(.subheadline)
+            .foregroundStyle(Theme.brass)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(Capsule().fill(Theme.brass.opacity(0.12)))
+        case .done:
+            EmptyView()
+        }
+    }
+
+    // MARK: Transcript
 
     private var transcript: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(model.lines) { line in
-                    TranscriptRow(line: line)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(model.lines) { line in
+                        TranscriptRow(line: line).id(line.id)
+                    }
+                    if !model.partial.isEmpty {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            TicketText("···").frame(width: 42, alignment: .leading)
+                            Text(model.partial)
+                                .italic()
+                                .foregroundStyle(Theme.smoke)
+                        }
+                        .id("partial")
+                    }
                 }
-                if !model.partial.isEmpty {
-                    Text(model.partial).foregroundStyle(.secondary)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    @ViewBuilder private var tasks: some View {
-        ForEach(model.tasks) { task in
-            HStack {
-                Image(systemName: task.done ? "checkmark.circle.fill" : "hourglass")
-                Text(task.label).lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        if let photo = model.lastPhoto {
-            HStack(alignment: .bottom, spacing: 12) {
-                Image(uiImage: photo)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                if model.lastPhotoSaved {
-                    Label("Saved to Photos", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// Asks the wearer to say one sentence so the backend learns their voice level.
-    @ViewBuilder private var calibrationBanner: some View {
-        if model.listening {
-            switch model.calibration {
-            case .none, .failed:
-                Button {
-                    model.calibrate()
-                } label: {
-                    Label(model.calibration == .failed ? "Didn't catch that, try again" : "Calibrate my voice",
-                          systemImage: "person.wave.2")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            case .listening:
-                Label("Say any sentence in your normal voice…", systemImage: "waveform")
-                    .frame(maxWidth: .infinity)
-                    .padding(10)
-                    .background(.yellow.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
-            case .done:
-                EmptyView()
+            .scrollIndicators(.hidden)
+            .onChange(of: model.lines.count) {
+                withAnimation(reduceMotion ? nil : .easeOut) { proxy.scrollTo(model.lines.last?.id, anchor: .bottom) }
             }
         }
     }
 
-    private var listenButton: some View {
-        VStack(spacing: 6) {
+    // MARK: Proof
+
+    @ViewBuilder private var proof: some View {
+        if !model.tasks.isEmpty || model.lastPhoto != nil {
+            HStack(alignment: .bottom, spacing: 14) {
+                if let photo = model.lastPhoto {
+                    Image(uiImage: photo)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 72, height: 96)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.brass.opacity(0.6), lineWidth: 1))
+                        .accessibilityLabel("Proof photo")
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    if let task = model.tasks.last {
+                        HStack(spacing: 6) {
+                            Image(systemName: task.done ? "checkmark" : "hourglass")
+                                .foregroundStyle(Theme.brass)
+                            Text(task.done ? "Photo found" : task.label)
+                                .foregroundStyle(Theme.chalk)
+                                .lineLimit(1)
+                        }
+                        .font(.subheadline)
+                    }
+                    if model.lastPhotoSaved {
+                        TicketText("Saved to Photos", color: Theme.brass)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    // MARK: Controls
+
+    private var controls: some View {
+        VStack(spacing: 10) {
             if model.listening && !model.route.isEmpty {
-                Text(model.route)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                TicketText(model.route)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             HStack(spacing: 12) {
                 Button(model.listening ? "Stop" : "Start listening") { model.toggleListening() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(BrassButtonStyle(filled: !model.listening))
                     .disabled(model.connection != .connected)
                 // Works offline: the fake call needs no backend.
                 Button {
@@ -118,9 +196,8 @@ struct ContentView: View {
                 } label: {
                     Label("Panic", systemImage: "phone.badge.waveform.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .controlSize(.large)
+                .buttonStyle(BrassButtonStyle(fill: Theme.alarm))
+                .frame(width: 132)
                 .disabled(model.panic != .idle)
             }
         }
@@ -129,22 +206,103 @@ struct ContentView: View {
     @ViewBuilder private var panicCountdown: some View {
         if case let .countdown(secondsLeft) = model.panic {
             HStack {
-                Text("\(model.panicCallerName) calls in \(secondsLeft)…")
+                Text("\(model.panicCallerName) calls in \(secondsLeft)")
                     .font(.headline.monospacedDigit())
                 Spacer()
                 Button("Cancel") { model.cancelPanic() }
+                    .font(.headline)
             }
-            .padding()
-            .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 14))
-            .foregroundStyle(.white)
-            .padding(.horizontal)
+            .foregroundStyle(Theme.chalk)
+            .padding(16)
+            .background(Theme.alarm, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+// MARK: - Pieces
+
+/// Connection state as a ticket: brass dot when live.
+private struct ConnectionTag: View {
+    let connection: AppModel.Connection
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            TicketText(label, color: color)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var label: String {
+        switch connection {
+        case .connected: "Live"
+        case .connecting: "Connecting"
+        case .disconnected: "Offline"
         }
     }
 
-    private var connectionDot: some View {
-        Circle()
-            .fill(model.connection == .connected ? .green : model.connection == .connecting ? .yellow : .red)
-            .frame(width: 10, height: 10)
+    private var color: Color {
+        switch connection {
+        case .connected: Theme.brass
+        case .connecting: Theme.smoke
+        case .disconnected: Theme.alarm
+        }
+    }
+}
+
+/// How close the wearer is to being caught, from the brain's risk score.
+private struct CoverMeter: View {
+    let risk: Double
+
+    var body: some View {
+        HStack(spacing: 10) {
+            TicketText("Cover")
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.pinstripe)
+                    Capsule()
+                        .fill(LinearGradient(colors: [Theme.brass, Theme.alarm], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(6, geometry.size.width * min(max(risk, 0), 1)))
+                }
+            }
+            .frame(height: 4)
+            TicketText(verdict, color: risk >= 0.67 ? Theme.alarm : Theme.smoke)
+                .frame(width: 48, alignment: .trailing)
+        }
+        .animation(.easeOut(duration: 0.4), value: risk)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Cover \(verdict)")
+    }
+
+    private var verdict: String {
+        switch risk {
+        case ..<0.34: "Solid"
+        case ..<0.67: "Shaky"
+        default: "Blown"
+        }
+    }
+}
+
+/// Brass sound bars while Roxy is talking.
+private struct VoiceBars: View {
+    let animated: Bool
+
+    var body: some View {
+        TimelineView(.animation(paused: !animated)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0..<5) { i in
+                    Capsule()
+                        .fill(Theme.brass)
+                        .frame(width: 3, height: animated ? 6 + 12 * abs(sin(t * 7 + Double(i) * 0.9)) : 10)
+                }
+            }
+            .frame(height: 18)
+        }
+        .accessibilityLabel("Speaking")
     }
 }
 
@@ -153,29 +311,19 @@ private struct TranscriptRow: View {
     let line: TranscriptLine
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(color)
-                .frame(width: 44, alignment: .leading)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            TicketText(label, color: line.speaker == .them ? Theme.brass : Theme.smoke)
+                .frame(width: 42, alignment: .leading)
             Text(line.text)
-                .foregroundStyle(line.speaker == .me ? .secondary : .primary)
+                .foregroundStyle(line.speaker == .me ? Theme.smoke : Theme.chalk)
         }
     }
 
     private var label: String {
         switch line.speaker {
-        case .me: "YOU"
-        case .them: "THEM"
-        case .unknown: "?"
-        }
-    }
-
-    private var color: Color {
-        switch line.speaker {
-        case .me: .gray
-        case .them: .orange
-        case .unknown: .secondary
+        case .me: "You"
+        case .them: "Them"
+        case .unknown: "—"
         }
     }
 }

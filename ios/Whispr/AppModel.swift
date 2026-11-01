@@ -46,6 +46,8 @@ final class AppModel {
     var lines: [TranscriptLine] = []
     var partial = ""
     var currentWhisper: String?
+    /// Roxy's voice is streaming into the wearer's ear right now.
+    var speaking = false
     var risk: Double = 0
     var tasks: [ProofTask] = []
     var lastError: String?
@@ -349,11 +351,14 @@ final class AppModel {
             if let url { Task { await savePhoto(url) } }
         case let .whisperAudioStart(_, sampleRate):
             audio.setPlaybackSampleRate(Double(sampleRate))
+            speaking = true
         case let .calibrated(ok, _):
             calibration = ok ? .done : .failed
         case let .error(message):
             lastError = message
-        case .whisperAudioEnd, .pong:
+        case .whisperAudioEnd:
+            speaking = false
+        case .pong:
             break
         }
     }

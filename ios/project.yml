@@ -23,6 +23,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Default backend for fresh installs; override with xcodebuild WHISPR_BACKEND_URL=wss://.../ws
         WHISPR_BACKEND_URL: ws://localhost:8787/ws
     info:
