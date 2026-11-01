@@ -5,6 +5,8 @@
 import { config } from "../config.js";
 
 export const TTS_SAMPLE_RATE = 24000;
+/** Whispers are spoken in turn, so a stalled request would silence every one after it. */
+const TTS_TIMEOUT_MS = 15_000;
 
 /**
  * Speaks `text`, calling `onChunk` with PCM16 mono chunks at TTS_SAMPLE_RATE.
@@ -24,6 +26,7 @@ export async function speak(text: string, onChunk: (pcm: Buffer) => void): Promi
       method: "POST",
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ text, model_id: ttsModel }),
+      signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
     },
   );
   if (!res.ok || !res.body) {

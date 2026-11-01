@@ -65,6 +65,12 @@ final class AudioPipeline: @unchecked Sendable {
     private let whisperLock = NSLock()
     private var configObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
+    /// Between start() and stop(). Main thread only, like `recovering`.
+    private var running = false
+    private var recovering = false
+    private static let recoverAttempts = 6
+    private static let recoverDelay: TimeInterval = 0.5
     private static let chunkBytes = 3200 // 100 ms at 16 kHz, 16-bit
     /// Keep the mic shut this long after a whisper, for the speaker to fall quiet.
     private static let speakerTail: TimeInterval = 0.3
@@ -80,14 +86,21 @@ final class AudioPipeline: @unchecked Sendable {
         self.voiceOutput = voiceOutput
         try configureSession()
         try startEngine()
+        await MainActor.run { running = true }
 
         // AirPods connecting/disconnecting changes the input format and stops the engine.
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
-            try? self.configureSession()
-            try? self.startEngine()
+            self?.recover()
+        }
+
+        // Headphones can vanish from the input list for a moment as Bluetooth switches
+        // modes, which leaves the voice on the earpiece until something pulls it back.
+        routeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.reclaimHeadphones()
         }
 
         // A phone call, Siri or an alarm pauses our audio; pick up again when it's over.
@@ -98,22 +111,52 @@ final class AudioPipeline: @unchecked Sendable {
                   let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   AVAudioSession.InterruptionType(rawValue: raw) == .ended
             else { return }
-            try? self.configureSession()
-            try? self.startEngine()
+            self.recover()
         }
     }
 
     func stop() {
-        for observer in [configObserver, interruptionObserver].compactMap({ $0 }) {
+        running = false
+        for observer in [configObserver, interruptionObserver, routeObserver].compactMap({ $0 }) {
             NotificationCenter.default.removeObserver(observer)
         }
         configObserver = nil
         interruptionObserver = nil
+        routeObserver = nil
         engine.inputNode.removeTap(onBus: 0)
         player.stop()
         engine.stop()
         pendingMic.removeAll()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// Restarts the audio on the main thread. The route is often still settling, so a
+    /// failed try is repeated instead of leaving the mic and voice dead until Stop → Start.
+    private func recover(attempt: Int = 1) {
+        guard running, attempt > 1 || !recovering else { return }
+        recovering = true
+        do {
+            try configureSession()
+            try startEngine()
+            recovering = false
+        } catch {
+            guard attempt < Self.recoverAttempts else {
+                recovering = false
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.recoverDelay) { [weak self] in
+                self?.recover(attempt: attempt + 1)
+            }
+        }
+    }
+
+    private func reclaimHeadphones() {
+        guard running, voiceOutput == .headphones, micSource == .airpods else { return }
+        let session = AVAudioSession.sharedInstance()
+        guard session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }),
+              let headphones = session.availableInputs?.first(where: { $0.portType == .bluetoothHFP })
+        else { return }
+        try? session.setPreferredInput(headphones)
     }
 
     // MARK: Whisper playback
@@ -149,7 +192,12 @@ final class AudioPipeline: @unchecked Sendable {
             }
         }
         player.scheduleBuffer(buffer)
-        if engine.isRunning && !player.isPlaying { player.play() }
+        if engine.isRunning {
+            if !player.isPlaying { player.play() }
+        } else {
+            // Nothing told us the engine stopped; a whisper is the first sign.
+            DispatchQueue.main.async { [weak self] in self?.recover() }
+        }
         if Self.playingOnSpeaker { extendSpeakerWhisper(by: Double(frames) / playerFormat.sampleRate) }
     }
 
