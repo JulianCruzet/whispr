@@ -9,6 +9,7 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 16) {
                 whisperCard
+                calibrationBanner
                 transcript
                 tasks
                 listenButton
@@ -38,7 +39,7 @@ struct ContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(model.lines) { line in
-                    Text("\(line.speaker.rawValue): \(line.text)")
+                    TranscriptRow(line: line)
                 }
                 if !model.partial.isEmpty {
                     Text(model.partial).foregroundStyle(.secondary)
@@ -65,6 +66,30 @@ struct ContentView: View {
         }
     }
 
+    /// Asks the wearer to say one sentence so the backend learns their voice level.
+    @ViewBuilder private var calibrationBanner: some View {
+        if model.listening {
+            switch model.calibration {
+            case .none, .failed:
+                Button {
+                    model.calibrate()
+                } label: {
+                    Label(model.calibration == .failed ? "Didn't catch that, try again" : "Calibrate my voice",
+                          systemImage: "person.wave.2")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            case .listening:
+                Label("Say any sentence in your normal voice…", systemImage: "waveform")
+                    .frame(maxWidth: .infinity)
+                    .padding(10)
+                    .background(.yellow.opacity(0.2), in: RoundedRectangle(cornerRadius: 12))
+            case .done:
+                EmptyView()
+            }
+        }
+    }
+
     private var listenButton: some View {
         VStack(spacing: 6) {
             if model.listening && !model.route.isEmpty {
@@ -83,5 +108,37 @@ struct ContentView: View {
         Circle()
             .fill(model.connection == .connected ? .green : model.connection == .connecting ? .yellow : .red)
             .frame(width: 10, height: 10)
+    }
+}
+
+/// One finished line. The other person's lines stand out; the wearer's are muted.
+private struct TranscriptRow: View {
+    let line: TranscriptLine
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(color)
+                .frame(width: 44, alignment: .leading)
+            Text(line.text)
+                .foregroundStyle(line.speaker == .me ? .secondary : .primary)
+        }
+    }
+
+    private var label: String {
+        switch line.speaker {
+        case .me: "YOU"
+        case .them: "THEM"
+        case .unknown: "?"
+        }
+    }
+
+    private var color: Color {
+        switch line.speaker {
+        case .me: .gray
+        case .them: .orange
+        case .unknown: .secondary
+        }
     }
 }
