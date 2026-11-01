@@ -9,7 +9,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | binary | Mic audio: PCM signed 16-bit little-endian, mono, **16 kHz**, ~100 ms per frame |
 | text | `{"type":"hello","device":"iphone","sampleRate":16000}` on connect |
 | text | `{"type":"debug_turn","text":"...","speaker":"them"}`: pretend someone said `text` (skips speech-to-text). Testing and demo fallback |
-| text | `{"type":"calibrate"}`: the next line spoken is the wearer; the backend learns how loud their voice is |
+| text | `{"type":"calibrate","who":"me"}` or `"who":"them"`: the next line spoken is that person's; the backend takes a voice sample from it. `who` defaults to `me` |
 | text | `{"type":"set_persona","persona":"first_date"}`: who the wearer is playing: `fan` (default), `interview`, `first_date` or `car_salesman`. Send it on every `ready` and when it changes. Changing it clears the conversation so far |
 | text | `{"type":"ping"}` |
 
@@ -24,7 +24,7 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 | text | `risk` `{score}`: 0..1, how close you are to getting caught |
 | text | `task_started` `{id, kind, label}`: e.g. finding a photo |
 | text | `task_done` `{id, kind, ok, imageUrl?, caption?}`: `imageUrl` normally points at this gateway (`/media/<id>`), which downloads the photo so the phone never hits a host that blocks it. If the gateway couldn't fetch it, it's the original address |
-| text | `calibrated` `{ok, levelDb?}`: reply to `calibrate` once the wearer's line arrives |
+| text | `calibrated` `{who, ok}`: reply to `calibrate` once that line arrives. `ok:false` means the line had too little speech for a sample |
 | text | `error` `{message}`, `pong` |
 
 ## When is a turn finished?
@@ -34,7 +34,15 @@ One WebSocket per phone at `/ws`. Source of truth: `backend/src/protocol.ts` (mi
 
 ## Who said it?
 
-Scribe realtime doesn't label speakers, so the backend uses loudness: with headphones on, the wearer is much louder in the mic than the person across from them. After `calibrate`, lines within 8 dB of the wearer's level are `me`, quieter ones are `them`. Before calibrating, everything is `unknown`. Lines from `me` never get a whisper.
+ElevenLabs Scribe realtime doesn't label speakers, so the gateway takes a **voiceprint** of every line: its average timbre (12 MFCCs), median pitch and loudness (`backend/src/ears/voiceprint.ts`).
+
+- **Calibrate both voices** (`calibrate` `who:"me"`, then `who:"them"`, one sentence each). Each line is then placed between the two samples (`speakers.ts`): near the wearer's → `me`, near theirs → `them`, in between → `unknown`. Loudness doesn't decide it, so it works with both people equally loud.
+- **A line holding both voices** (a quick back-and-forth Scribe committed as one) is split at the word where the voice changes, and sent as two turns.
+- **Only the wearer calibrated:** falls back to loudness (within 8 dB of the wearer is `me`).
+- **Not calibrated, or `unknown`:** the brain's Jev decides from the words.
+- Lines from `me` never get a whisper.
+
+`npx tsx scripts/eval-speakers.ts <dir> <VoiceA> <VoiceB>` scores two recorded voices at equal loudness (see the script for the file layout).
 
 ## Dashboard
 

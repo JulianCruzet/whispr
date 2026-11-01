@@ -109,7 +109,10 @@ function newSession() {
   phones.push(phone);
   const session = new PhoneSession(phone as never);
   // Test hook: what Scribe would emit for a finished line at a given loudness.
-  const scribeSays = (text: string, db: number | null) => (session as any).scribe.emit("committed", text, db);
+  // Test hook: what Scribe would emit for a finished line at a given loudness (no audio, so
+  // speaker detection falls back to loudness; speakers.test.ts covers voices).
+  const scribeSays = (text: string, db: number | null) =>
+    (session as any).scribe.emit("committed", text, { levelDb: db, words: [{ text, start: 0, end: 1 }] });
   return { phone, session, scribeSays };
 }
 
@@ -142,7 +145,7 @@ describe("me vs them", () => {
     scribeSays("yeah it was great", -24); // within 8 dB: the wearer
     await until(() => brain.received.length === 3);
 
-    assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", ok: true, levelDb: -21 });
+    assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", who: "me", ok: true });
     assert.deepEqual(
       brain.received.map((m) => m.speaker),
       ["me", "them", "me"],
@@ -268,6 +271,22 @@ describe("photo relay", () => {
       order.map((e) => (e as Record<string, any>).type),
       ["task_done", "whisper"],
     );
+  });
+});
+
+describe("calibrating the other person", () => {
+  test("calibrate who=them marks that line as theirs and confirms it", async () => {
+    brain.received.length = 0;
+    brain.reply = () => [];
+    const { phone, scribeSays } = newSession();
+    phone.say({ type: "calibrate", who: "them" });
+    scribeSays("hi, I'm Sam", -24);
+    await until(() => phone.events("calibrated").length === 1 && brain.received.length === 1);
+
+    // No audio here, so no voiceprint: a sample of the other person can't be taken.
+    assert.deepEqual(phone.events("calibrated")[0], { type: "calibrated", who: "them", ok: false });
+    assert.equal(phone.events("transcript")[0].speaker, "them");
+    assert.equal(brain.received[0].speaker, "them");
   });
 });
 
