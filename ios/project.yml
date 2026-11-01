@@ -26,11 +26,17 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Default backend for fresh installs; override with xcodebuild WHISPR_BACKEND_URL=wss://.../ws
         WHISPR_BACKEND_URL: ws://localhost:8787/ws
+        # Project URL and publishable key from Supabase. Left empty, the app skips sign-in.
+        # Never put the secret key here: anything in the app can be read out of it.
+        SUPABASE_URL: https://txfoohqiwzxtzyzboidh.supabase.co
+        SUPABASE_PUBLISHABLE_KEY: sb_publishable_v9ulcF884Vjsn1p2XZ1LpA_8WIBuEj1
     info:
       path: Whispr/Info.plist
       properties:
         CFBundleDisplayName: Whispr
         WhisprBackendURL: $(WHISPR_BACKEND_URL)
+        SupabaseURL: $(SUPABASE_URL)
+        SupabasePublishableKey: $(SUPABASE_PUBLISHABLE_KEY)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [audio, voip]

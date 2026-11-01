@@ -100,12 +100,20 @@ Choose who you're playing under **Settings → Persona**. Every persona follows 
 | **Two call screens** | Whispr's own full-screen call, or the real iOS call screen |
 | **Picks back up** | Listening pauses during the call and resumes when it ends |
 
+### 🔐 Sign-in
+
+| Feature | Description |
+|---|---|
+| **Landing page** | Signed-out people see what Whispr does, then create an account or sign in |
+| **Email and password** | Accounts are handled by Supabase Auth |
+| **Remembers you** | Your session stays in the iOS Keychain, so the app opens straight in. A bad connection never signs you out |
+
 ### 🔍 Built for the stage
 
 - **Demo fallback:** buttons in Settings play the other person's line if live transcription fails
 - **Stays connected:** the app reconnects by itself and keeps the screen awake while listening
 - **Big text:** every whisper is also shown large on screen, so judges can see it if the audio fails
-- **Tested:** 56 brain tests and 21 gateway tests
+- **Tested:** 65 brain tests and 25 gateway tests
 
 ---
 
@@ -115,6 +123,7 @@ Choose who you're playing under **Settings → Persona**. Every persona follows 
 
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-F05138?style=for-the-badge&logo=swift&logoColor=white)
 ![CallKit](https://img.shields.io/badge/CallKit-000000?style=for-the-badge&logo=apple&logoColor=white)
+![Supabase Auth](https://img.shields.io/badge/Supabase_Auth-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)
 
 **Audio gateway**
 
@@ -199,6 +208,8 @@ cd ios && xcodegen && open Whispr.xcodeproj
 
 Re-run `xcodegen` after adding or removing Swift files. In Xcode, pick your team under Signing & Capabilities, plug in your iPhone and hit Run. In the app's settings, set the backend URL to `ws://<laptop-ip>:8787/ws` (same Wi-Fi), or the Render URL (`wss://.../ws`).
 
+Sign-in uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in `ios/project.yml`. Clear both to skip sign-in, for example on a demo phone. Never put a Supabase secret key there, because anything in the app can be read out of it.
+
 ---
 
 ## 📁 Project Structure
@@ -206,6 +217,7 @@ Re-run `xcodegen` after adding or removing Swift files. In Xcode, pick your team
 ```
 ios/Whispr/
   Audio/                     mic capture, headphone playback, saving photos
+  Auth/                      Supabase sign-in and the saved session
   Net/                       WebSocket client and message types
   Panic/                     fake call screen, CallKit and ringtone
   Views/                     main screen, settings and theme

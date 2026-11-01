@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -61,6 +62,15 @@ struct SettingsView: View {
                         Button("Reconnect") { model.connect() }
                     } header: {
                         Text("Server")
+                    }
+                    if let email = auth.email {
+                        Section("Account") {
+                            Text(email)
+                            Button("Sign out", role: .destructive) {
+                                if model.listening { model.stopListening() }
+                                auth.signOut()
+                            }
+                        }
                     }
                     if let error = model.lastError {
                         Section("Last error") {
