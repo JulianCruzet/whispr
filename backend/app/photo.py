@@ -56,14 +56,16 @@ def fallback_photo(settings: Settings) -> Photo | None:
     return Photo(image_url=image_url, title="Laufey at Scotiabank Arena", used_fallback=True)
 
 
-async def find_photo(http: httpx.AsyncClient, settings: Settings, query: str) -> Photo | None:
-    if not settings.brave_search_api_key:
-        log.warning("No BRAVE_SEARCH_API_KEY, using the cached photo")
-        return fallback_photo(settings)
-    try:
-        async with asyncio.timeout(settings.photo_deadline_s):
-            photo = await _search(http, settings, query)
-    except (TimeoutError, httpx.HTTPError, ValueError) as exc:
-        log.warning("Photo search failed, using the cached photo: %r", exc)
-        photo = None
-    return photo or fallback_photo(settings)
+async def find_photo(
+    http: httpx.AsyncClient, settings: Settings, query: str, use_cached: bool = True
+) -> Photo | None:
+    photo = None
+    if settings.brave_search_api_key:
+        try:
+            async with asyncio.timeout(settings.photo_deadline_s):
+                photo = await _search(http, settings, query)
+        except (TimeoutError, httpx.HTTPError, ValueError) as exc:
+            log.warning("Photo search failed: %r", exc)
+    else:
+        log.warning("No BRAVE_SEARCH_API_KEY, so no photo search")
+    return photo or (fallback_photo(settings) if use_cached else None)

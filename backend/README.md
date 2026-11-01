@@ -45,6 +45,21 @@ Send one message per committed Scribe line:
 - `speaker` is optional. `"me"` or `"them"` is trusted as is, so send those if you know. Anything else, like a Scribe label, is only a hint and Jev decides.
 - `is_final` defaults to `true`. Lines with `false` are ignored, so a whisper only follows a finished line.
 
+Choose who the wearer is playing at any time. The default is `fan`, and changing persona clears the conversation so far:
+
+```json
+{ "type": "set_persona", "persona": "first_date" }
+```
+
+| Persona | Scene | Photos |
+|---|---|---|
+| `fan` | Into whatever the other person brings up | Search, then the cached photo |
+| `interview` | Candidate in a mock interview | None |
+| `first_date` | Charming on a pretend first date | Search only |
+| `car_salesman` | Over-the-top used car sales sketch | Search only |
+
+The backend replies with `{ "type": "persona", "persona": "first_date" }`, or an `error` event if it doesn't know the persona. To test one with `POST /transcript`, add `&persona=first_date`. Personas are defined in [app/personas.py](app/personas.py).
+
 ### Backend to app
 
 **`transcript`** echoes each line with Jev's read of it. Use it for the live transcript and the cover-blown meter. `cover_blown_risk` runs from 0 to 1, or is `null` if Jev failed.

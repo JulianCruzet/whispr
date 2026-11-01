@@ -8,14 +8,17 @@ import anthropic
 import httpx
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from starlette.requests import HTTPConnection
 
 from app.config import ASSETS_DIR, FALLBACK_PHOTO, Settings
-from app.events import TranscriptIn
+from app.events import PersonaIn, TranscriptIn
+from app.personas import PERSONAS
 from app.session import Deps, Session
 
 logging.basicConfig(level=logging.INFO)
+
+WS_MESSAGE = TypeAdapter(TranscriptIn | PersonaIn)
 
 
 def build_deps() -> Deps:
@@ -67,13 +70,19 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.post("/transcript")
     async def post_transcript(
-        msg: TranscriptIn, request: Request, session_id: str = "default", wait_tasks: bool = False
+        msg: TranscriptIn,
+        request: Request,
+        session_id: str = "default",
+        wait_tasks: bool = False,
+        persona: str | None = None,
     ) -> dict:
         """One-shot version of /ws for testing. Late task events need wait_tasks=true."""
         if not authorized(request):
             raise HTTPException(status_code=401, detail="Bad app token")
 
         session = get_session(session_id)
+        if persona is not None and not session.set_persona(persona):
+            raise HTTPException(status_code=422, detail=f"Unknown persona. Use one of {list(PERSONAS)}")
         events: list[dict] = []
 
         async def collect(event: dict) -> None:
@@ -107,9 +116,15 @@ def create_app(deps: Deps | None = None) -> FastAPI:
             while True:
                 raw = await ws.receive_text()
                 try:
-                    msg = TranscriptIn.model_validate_json(raw)
+                    msg = WS_MESSAGE.validate_json(raw)
                 except ValidationError as exc:
                     await send({"type": "error", "detail": exc.errors(include_url=False, include_input=False)})
+                    continue
+                if isinstance(msg, PersonaIn):
+                    if session.set_persona(msg.persona):
+                        await send({"type": "persona", "persona": msg.persona})
+                    else:
+                        await send({"type": "error", "detail": f"Unknown persona. Use one of {list(PERSONAS)}"})
                     continue
                 # Not awaited, so a slow Jev or Haiku call never blocks the next line.
                 session.spawn(session.handle_transcript(msg))
