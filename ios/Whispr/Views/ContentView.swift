@@ -27,7 +27,6 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) { SettingsView() }
         .fullScreenCover(isPresented: .constant(model.showsFakeCallScreen)) { FakeCallView() }
         .overlay(alignment: .top) { panicCountdown }
-        .overlay { CallIslandOverlay() }
         .onAppear { if model.connection == .disconnected { model.connect() } }
     }
 
