@@ -34,11 +34,11 @@ struct SettingsView: View {
                             Text("5 seconds").tag(5)
                             Text("10 seconds").tag(10)
                         }
-                        Toggle("Use the iOS call screen", isOn: $model.panicUsesCallKit)
+                        Toggle("Ring when Whispr is closed", isOn: $model.panicUsesCallKit)
                     } header: {
                         Text("Panic button")
                     } footer: {
-                        Text("Panic fakes an incoming call so you can walk away. Listening pauses until you hang up. The iOS call screen looks real on a locked phone, but shows as a banner while Whispr is open.")
+                        Text("Panic fakes an incoming call so you can walk away. Listening pauses until you hang up. With Whispr open, the call stays in a small pill after you answer. On a locked phone or in another app, iOS shows its own call screen, labelled Whispr Audio.")
                     }
                     Section {
                         Button("They say: \"Wait, you saw Laufey live?\"") {
