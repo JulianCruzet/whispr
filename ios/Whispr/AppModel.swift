@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Observation
 import UIKit
@@ -29,6 +30,8 @@ final class AppModel {
     var risk: Double = 0
     var tasks: [ProofTask] = []
     var lastError: String?
+    /// Current audio route, e.g. "Mic: WH-1000XM5 · Voice: WH-1000XM5".
+    var route = ""
 
     var lastPhoto: UIImage?
 
@@ -47,7 +50,9 @@ final class AppModel {
     private let audio = AudioPipeline()
 
     init() {
-        backendURL = UserDefaults.standard.string(forKey: "backendURL") ?? "ws://192.168.1.10:8787/ws"
+        backendURL = UserDefaults.standard.string(forKey: "backendURL")
+            ?? Bundle.main.object(forInfoDictionaryKey: "WhisprBackendURL") as? String
+            ?? "ws://localhost:8787/ws"
         micSource = MicSource(rawValue: UserDefaults.standard.string(forKey: "micSource") ?? "") ?? .airpods
 
         let client = client
@@ -55,6 +60,9 @@ final class AppModel {
         let audio = audio
         client.onAudio = { data in audio.play(data) }
         client.onEvent = { [weak self] event in Task { @MainActor in self?.handle(event) } }
+        NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.route = AudioPipeline.routeDescription() }
+        }
         client.onDisconnect = { [weak self] error in
             Task { @MainActor in
                 guard let self else { return }
@@ -87,6 +95,9 @@ final class AppModel {
             try await audio.start(micSource: micSource)
             listening = true
             lastError = nil
+            // Auto-lock mid-conversation would cut the mic.
+            UIApplication.shared.isIdleTimerDisabled = true
+            route = AudioPipeline.routeDescription()
         } catch {
             lastError = error.localizedDescription
         }
@@ -95,6 +106,7 @@ final class AppModel {
     func stopListening() {
         audio.stop()
         listening = false
+        UIApplication.shared.isIdleTimerDisabled = false
     }
 
     private func restartListening() async {

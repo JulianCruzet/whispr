@@ -8,7 +8,7 @@ import { emailPhoto } from "../tasks/agentboxd.js";
 import { findPhoto } from "../tasks/findPhoto.js";
 import { decide } from "./jev.js";
 import type { Turn } from "./types.js";
-import { writeLine } from "./whisper.js";
+import { writeLine, writeSearchQuery } from "./whisper.js";
 
 const MIN_GAP_BETWEEN_WHISPERS_MS = 4000;
 const WHISPER_THRESHOLD = 0.6;
@@ -23,7 +23,8 @@ export interface BrainOutput {
 export class Brain {
   private history: Turn[] = [];
   private lastWhisperAt = 0;
-  private persona = "a huge Laufey fan who has seen her live in Toronto";
+  /** Optional cover story; without one Roxy just plays along with their topic. */
+  private persona = "";
 
   constructor(private out: BrainOutput) {}
 
@@ -39,7 +40,7 @@ export class Brain {
     this.out.send({ type: "risk", score: decision.risk });
 
     if (decision.task === "find_photo") {
-      void this.runFindPhoto(`${this.persona}. ${this.history.map((t) => t.text).join(" ")}`);
+      void this.runFindPhoto();
     }
 
     const cooledDown = Date.now() - this.lastWhisperAt > MIN_GAP_BETWEEN_WHISPERS_MS;
@@ -47,15 +48,15 @@ export class Brain {
       this.lastWhisperAt = Date.now();
       const id = randomUUID();
       const line = await writeLine(this.history, this.persona);
+      if (!line) return;
       this.out.send({ type: "whisper", id, text: line });
       await this.out.say(id, line);
     }
   }
 
-  private async runFindPhoto(context: string) {
+  private async runFindPhoto() {
     const id = randomUUID();
-    // TODO(Person B): have the LLM turn the conversation into a good search query.
-    const query = /laufey/i.test(context) ? "Laufey concert Scotiabank Arena Toronto" : `${context} photo`;
+    const query = await writeSearchQuery(this.history, this.persona);
     this.out.send({ type: "task_started", id, kind: "find_photo", label: `Finding a photo: ${query}` });
 
     const photo = await findPhoto(query);

@@ -117,7 +117,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					1FE76A5CA204D15265764CB0 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = 88B25A43QT;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -176,6 +176,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.juliancruzet.whispr;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
+				WHISPR_BACKEND_URL = "ws://localhost:8787/ws";
 			};
 			name = Release;
 		};
@@ -215,7 +216,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 88B25A43QT;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -273,7 +274,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 88B25A43QT;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -318,6 +319,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.juliancruzet.whispr;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
+				WHISPR_BACKEND_URL = "ws://localhost:8787/ws";
 			};
 			name = Debug;
 		};
