@@ -1,0 +1,38 @@
+# Xcode project spec. After adding/removing Swift files run:  cd ios && xcodegen
+name: Whispr
+options:
+  bundleIdPrefix: com.juliancruzet
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    # Set your team in Xcode (Signing & Capabilities) or here.
+    DEVELOPMENT_TEAM: ""
+targets:
+  Whispr:
+    type: application
+    platform: iOS
+    sources:
+      - Whispr
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.juliancruzet.whispr
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+    info:
+      path: Whispr/Info.plist
+      properties:
+        CFBundleDisplayName: Whispr
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [audio]
+        NSMicrophoneUsageDescription: Whispr listens to your conversation so it can whisper what to say next.
+        NSPhotoLibraryAddUsageDescription: Whispr saves proof photos to your library.
+        NSLocalNetworkUsageDescription: Whispr connects to the backend running on your laptop.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
