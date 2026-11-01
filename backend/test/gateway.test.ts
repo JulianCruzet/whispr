@@ -172,7 +172,14 @@ describe("bridge to the brain", () => {
     phone.say({ type: "debug_turn", text: "which show?", speaker: "them" });
     await until(() => phone.events("whisper_audio_end").length === 1 && phone.events("task_done").length === 1);
 
-    assert.deepEqual(phone.events("whisper")[0], { type: "whisper", id: "w1", text: "Say the Toronto show.", reason: "reply" });
+    // No cue from the brain: the phone is told the whole line is what's spoken.
+    assert.deepEqual(phone.events("whisper")[0], {
+      type: "whisper",
+      id: "w1",
+      text: "Say the Toronto show.",
+      spoken: "Say the Toronto show.",
+      reason: "reply",
+    });
     assert.equal(phone.events("task_started")[0].id, "t1");
     assert.deepEqual(phone.events("task_done")[0], {
       type: "task_done",
@@ -375,6 +382,8 @@ describe("what goes in the ear", () => {
         ["Say the Toronto crowd was lit and God's Plan was the high point.", "Say hold on."],
       );
       assert.deepEqual(spoken, ["Crowd was lit, God's Plan.", "Say hold on."]);
+      // The phone shows exactly what's said in the ear.
+      assert.deepEqual(phone.events("whisper").map((e) => e.spoken), spoken);
     } finally {
       globalThis.fetch = realFetch;
       config.elevenlabs.apiKey = realKey;

@@ -179,6 +179,7 @@ def test_the_ear_gets_a_short_cue_and_the_screen_the_full_line():
     system = backend.claude_requests[0]["system"]
     assert "For their ear" in system and "2 to 5 words" in system
     assert "Never repeat a name, place or detail" in system
+    assert "using only words from line 1" in system
 
 
 @pytest.mark.parametrize(

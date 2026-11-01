@@ -104,13 +104,22 @@ struct ContentView: View {
             }
             Group {
                 if let whisper = model.currentWhisper {
-                    Text(whisper)
-                        .font(Theme.display)
-                        .tracking(-0.9)
-                        .lineSpacing(-2)
-                        .foregroundStyle(Theme.text)
-                        .id(whisper)
-                        .transition(reduceMotion ? .opacity : Theme.rise)
+                    // Big: exactly what's said in the ear. Below: the full line, for context.
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(model.currentCue ?? whisper)
+                            .font(Theme.display)
+                            .tracking(-0.9)
+                            .lineSpacing(-2)
+                            .foregroundStyle(Theme.text)
+                        if let cue = model.currentCue, cue != whisper {
+                            Text(whisper)
+                                .font(Theme.body)
+                                .foregroundStyle(Theme.text2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .id(whisper)
+                    .transition(reduceMotion ? .opacity : Theme.rise)
                 } else {
                     Text(model.listening ? "Listening. Your next line shows up here." : "Start listening when the conversation begins.")
                         .font(.system(size: 20, weight: .medium))

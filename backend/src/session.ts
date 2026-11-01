@@ -396,6 +396,7 @@ export class PhoneSession {
           type: "whisper",
           id: event.id,
           text: event.text,
+          spoken: event.spoken || event.text,
           reason: event.reason === "task_done" ? "photo_ready" : "reply",
         });
         // The ear gets the short cue; the full line is on the screen.
