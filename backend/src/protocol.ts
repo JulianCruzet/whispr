@@ -10,7 +10,8 @@ export type TaskKind = "find_photo" | "look_up_fact";
 // Binary frames: raw mic audio, PCM signed 16-bit little-endian, mono, 16 kHz.
 // Text frames: JSON, one of:
 export type ClientMessage =
-  | { type: "hello"; device: string; sampleRate: number }
+  /** `deviceId` lets the gateway keep this phone's voice calibration across reconnects. */
+  | { type: "hello"; device: string; sampleRate: number; deviceId?: string }
   /** Pretend someone said `text` (skips Scribe). For testing and as a demo fallback. */
   | { type: "debug_turn"; text: string; speaker?: Speaker }
   /** The next line spoken is `who` (default "me"): learn what their voice sounds like. */
@@ -41,6 +42,9 @@ export type ServerEvent =
       caption?: string;
       emailed?: boolean;
     }
-  | { type: "calibrated"; who: "me" | "them"; ok: boolean }
+  /** Calibration progress: seconds of `who`'s speech collected so far, out of `target`. */
+  | { type: "calibrating"; who: "me" | "them"; seconds: number; target: number }
+  /** `reason` says why a sample was refused: too little speech, or "them" sounded like the wearer. */
+  | { type: "calibrated"; who: "me" | "them"; ok: boolean; reason?: "too_short" | "sounds_like_you" }
   | { type: "error"; message: string }
   | { type: "pong" };

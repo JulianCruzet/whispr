@@ -5,11 +5,22 @@ import type { WebSocket } from "ws";
 import { BrainLink, type BrainEvent } from "./brainLink.js";
 import { config } from "./config.js";
 import { ScribeSession, type Segment } from "./ears/scribe.js";
-import { SpeakerModel, splitBySpeaker, type Who } from "./ears/speakers.js";
-import { voiceprint } from "./ears/voiceprint.js";
+import { SpeakerModel, splitBySpeaker, type TimedWord, type Who } from "./ears/speakers.js";
+import { voiceprint, type Voiceprint } from "./ears/voiceprint.js";
 import { cacheImage } from "./media.js";
 import type { ClientMessage, ServerEvent, Speaker } from "./protocol.js";
 import { speak, TTS_SAMPLE_RATE } from "./voice/tts.js";
+
+/**
+ * Calibration listens across lines until it has this much of the person's speech. The
+ * wearer's sample is what every line is measured against, so it gets the longer one.
+ */
+const CALIBRATION_TARGET_SECONDS: Record<Who, number> = { me: 4, them: 3 };
+/** ...and gives up after this many lines, keeping the sample if it has at least the minimum. */
+const CALIBRATION_MAX_LINES = 4;
+const CALIBRATION_MIN_SECONDS = 1.5;
+/** Each phone's voice samples, kept across reconnects (a tunnel blip shouldn't mean recalibrating). */
+const savedSpeakers = new Map<string, SpeakerModel>();
 
 /** Dashboards (mission-control screens) get a copy of every event. */
 export const dashboards = new Set<WebSocket>();
@@ -25,8 +36,8 @@ export class PhoneSession {
   private brain = new BrainLink(this.id);
   /** Tells the wearer from the other person, from samples taken by "calibrate". */
   private speakers = new SpeakerModel();
-  /** Whose voice the next finished line is a sample of, if calibrating. */
-  private calibrating: Who | null = null;
+  /** Calibration in progress: whose voice, and the audio collected from their lines so far. */
+  private calibrating: { who: Who; audio: Buffer[]; lines: number; skipped: number; levels: number[] } | null = null;
   /** Lines sent to the brain and not yet echoed back, to match its verdict to our transcript id. */
   private pendingLines: { id: string; text: string; speaker: Speaker }[] = [];
   /** Whispers are spoken one after another, never over each other. */
@@ -88,8 +99,68 @@ export class PhoneSession {
     }
     if (msg.type === "ping") this.send({ type: "pong" });
     if (msg.type === "debug_turn" && msg.text) this.onTurn(msg.text, msg.speaker ?? "them");
-    if (msg.type === "calibrate") this.calibrating = msg.who === "them" ? "them" : "me";
+    if (msg.type === "calibrate") {
+      this.calibrating = { who: msg.who === "them" ? "them" : "me", audio: [], lines: 0, skipped: 0, levels: [] };
+    }
+    if (msg.type === "hello" && msg.deviceId) this.restoreSpeakers(msg.deviceId);
     if (msg.type === "set_persona" && msg.persona) this.brain.setPersona(msg.persona);
+  }
+
+  /** Uses this phone's saved voice samples, if it calibrated before; tells the app what's already done. */
+  private restoreSpeakers(deviceId: string) {
+    const saved = savedSpeakers.get(deviceId);
+    if (saved) {
+      this.speakers = saved;
+      const { me, them } = saved.calibrated;
+      console.log(`[${this.id.slice(0, 8)}] restored calibration (me ${me}, them ${them})`);
+      if (me) this.send({ type: "calibrated", who: "me", ok: true });
+      if (them) this.send({ type: "calibrated", who: "them", ok: true });
+    } else {
+      savedSpeakers.set(deviceId, this.speakers);
+    }
+  }
+
+  /**
+   * One line toward a calibration sample. Lines add up until there's enough speech, so a
+   * short "yeah, hi" doesn't make a bad sample. While sampling the other person, lines in
+   * the wearer's voice ("go on, say something") are left out.
+   */
+  private collectSample(text: string, words: TimedWord[] | null, print: Voiceprint | null, levelDb: number | null) {
+    const tag = `[${this.id.slice(0, 8)}]`;
+    const sampling = this.calibrating!;
+    // Their sample must not catch the wearer prompting them, so skip any line that isn't
+    // clearly another voice: skipping one of theirs only costs a line. At most two, in case
+    // the two voices are simply very alike.
+    if (sampling.who === "them" && sampling.skipped < 2 && print && this.speakers.couldBe("me", print)) {
+      sampling.skipped++;
+      console.log(`${tag} calibrating them: skipped a line in the wearer's voice`);
+      this.onTurn(text, "me");
+      return;
+    }
+
+    const audio = words ? this.scribe.audioBetween(words[0].start, words[words.length - 1].end) : null;
+    if (audio) sampling.audio.push(audio);
+    if (levelDb !== null) sampling.levels.push(levelDb);
+    sampling.lines++;
+    const sample = sampling.audio.length ? voiceprint(Buffer.concat(sampling.audio)) : null;
+    const seconds = sample?.seconds ?? 0;
+    const target = CALIBRATION_TARGET_SECONDS[sampling.who];
+    this.send({ type: "calibrating", who: sampling.who, seconds, target });
+    this.onTurn(text, sampling.who);
+
+    if (seconds < target && sampling.lines < CALIBRATION_MAX_LINES) return;
+    this.calibrating = null;
+    const level = sampling.levels.length ? sampling.levels.reduce((a, b) => a + b, 0) / sampling.levels.length : null;
+    // A "them" sample that is really the wearer would turn every line into a coin toss.
+    const reason =
+      seconds < CALIBRATION_MIN_SECONDS || !sample
+        ? "too_short"
+        : sampling.who === "them" && this.speakers.soundsLike("me", sample)
+          ? "sounds_like_you"
+          : null;
+    const ok = reason === null && this.speakers.calibrate(sampling.who, sample, level);
+    console.log(`${tag} calibrated ${sampling.who}: ${ok ? `${seconds.toFixed(1)}s from ${sampling.lines} lines` : `failed (${reason ?? "unusable"}, ${seconds.toFixed(1)}s)`}`);
+    this.send({ type: "calibrated", who: sampling.who, ok, ...(ok ? {} : { reason: reason ?? "too_short" }) });
   }
 
   private onCommitted(text: string, segment: Segment | null) {
@@ -103,12 +174,7 @@ export class PhoneSession {
     const levelDb = segment?.levelDb ?? null;
 
     if (this.calibrating) {
-      const who = this.calibrating;
-      this.calibrating = null;
-      const ok = this.speakers.calibrate(who, print, levelDb);
-      console.log(`${tag} calibrated ${who}: ${ok ? `${print?.seconds.toFixed(1) ?? "?"}s of speech` : "failed"}`);
-      this.send({ type: "calibrated", who, ok });
-      this.onTurn(text, who);
+      this.collectSample(text, words, print, levelDb);
       return;
     }
 
