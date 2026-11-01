@@ -8,6 +8,8 @@ struct TranscriptLine: Identifiable {
     let id: String
     var text: String
     var speaker: Speaker
+    /// When the line was finished, shown as a mono timestamp.
+    var at = Date()
 }
 
 struct ProofTask: Identifiable {

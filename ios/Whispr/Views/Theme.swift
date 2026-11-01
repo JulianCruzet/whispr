@@ -1,43 +1,47 @@
-// FACE: a calm, editorial look in the spirit of Wealthsimple: warm paper canvas,
-// graphite type, a serif for the things that matter, black pill buttons, hairlines
-// instead of shadows. The line to say sits on a dark bronze panel, the one dark
-// object on the screen, so it's the first thing the eye lands on.
+// FACE: the terminal look. Dark only, black and greys everywhere; colour only ever
+// means good (green) or bad (red), never decoration. Readings (times, levels, counts)
+// are monospaced with tabular figures. Quiet, fast motion.
 
 import SwiftUI
 
 enum Theme {
     // MARK: Colour
 
-    /// Page canvas.
-    static let paper = Color(hex: 0xFCFCFC)
-    /// Warm wash for quiet surfaces (pills, the calibrate button).
-    static let linen = Color(hex: 0xF4F1EC)
-    /// Hairline borders and dividers.
-    static let stone = Color(hex: 0xE4E2E1)
-    /// Primary text.
-    static let graphite = Color(hex: 0x32302F)
-    /// Secondary text and the wearer's own lines.
-    static let pebble = Color(hex: 0x686664)
-    /// Primary buttons.
-    static let charcoal = Color(hex: 0x09090A)
-    /// The panel for the line to say.
-    static let bronze = Color(hex: 0x3A3525)
-    /// Text on the bronze panel.
-    static let cream = Color(hex: 0xF6F1E7)
-    /// Panic and warnings: the only strong colour, kept for the escape hatch.
-    static let brick = Color(hex: 0xA33A2B)
-    /// "Live" and "saved" confirmations.
-    static let moss = Color(hex: 0x3E7A52)
+    static let bg = Color(hex: 0x0A0A0A)
+    /// Cards, inputs, buttons.
+    static let surface = Color(hex: 0x121212)
+    /// Raised surface, focused input.
+    static let surface2 = Color(hex: 0x181818)
+    static let surfaceHover = Color(hex: 0x1F1F1F)
+    /// Borders and dividers.
+    static let line = Color(hex: 0x232323)
+    static let lineStrong = Color(hex: 0x2E2E2E)
+    static let text = Color(hex: 0xF4F4F5)
+    static let text2 = Color(hex: 0xA1A1AA)
+    /// Labels, meta, placeholders.
+    static let muted = Color(hex: 0x71717A)
+    /// Good: live, saved, cover holding.
+    static let up = Color(hex: 0x4CC38A)
+    static let upTint = Color(hex: 0x4CC38A).opacity(0.10)
+    /// Bad: cover blown, offline, Panic, errors.
+    static let down = Color(hex: 0xE5484D)
+    static let downTint = Color(hex: 0xE5484D).opacity(0.10)
 
     // MARK: Type
 
-    /// Editorial serif (iOS's New York) for the wordmark and the line to say.
-    static func serif(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
-        .system(style, design: .serif).weight(weight)
-    }
+    /// The line to say: the one big reading on screen.
+    static let display = Font.system(size: 30, weight: .medium)
+    static let body = Font.system(size: 15)
+    static let emphasis = Font.system(size: 15, weight: .medium)
+    static let label = Font.system(size: 12, weight: .medium)
+    /// Readings and meta: timestamps, levels, counts.
+    static let meta = Font.system(size: 12, design: .monospaced).monospacedDigit()
 
-    /// Small UI labels: sentence case with a touch of tracking.
-    static let label = Font.footnote.weight(.medium)
+    // MARK: Motion
+
+    /// Content fades in over 180 ms with a 2 pt rise.
+    static let appear = Animation.easeOut(duration: 0.18)
+    static let rise: AnyTransition = .opacity.combined(with: .offset(y: 2))
 }
 
 extension Color {
@@ -50,12 +54,12 @@ extension Color {
     }
 }
 
-/// A small sentence-case label.
+/// A small label: 12 pt medium, muted.
 struct LabelText: View {
     let text: String
-    var color: Color = Theme.pebble
+    var color: Color = Theme.muted
 
-    init(_ text: String, color: Color = Theme.pebble) {
+    init(_ text: String, color: Color = Theme.muted) {
         self.text = text
         self.color = color
     }
@@ -63,51 +67,114 @@ struct LabelText: View {
     var body: some View {
         Text(text)
             .font(Theme.label)
-            .tracking(0.2)
             .foregroundStyle(color)
     }
 }
 
-/// Pill buttons: filled charcoal (primary), outlined (secondary), linen (quiet), or a custom fill.
+/// A reading: monospaced, tabular, muted.
+struct MetaText: View {
+    let text: String
+    var color: Color = Theme.muted
+
+    init(_ text: String, color: Color = Theme.muted) {
+        self.text = text
+        self.color = color
+    }
+
+    var body: some View {
+        Text(text)
+            .font(Theme.meta)
+            .foregroundStyle(color)
+    }
+}
+
+/// Pill buttons. Primary is inverted (light fill, dark text); the rest sit on the surface.
+/// Main actions are 44 pt tall to stay easy to hit mid-conversation; small ones 36 pt.
 struct PillButtonStyle: ButtonStyle {
-    enum Kind { case primary, secondary, quiet, alarm }
-    var kind: Kind = .primary
+    enum Kind { case primary, secondary, alarm }
+    var kind: Kind = .secondary
+    var height: CGFloat = 44
 
     func makeBody(configuration: Configuration) -> some View {
-        PillButtonBody(configuration: configuration, kind: kind)
+        PillButtonBody(configuration: configuration, kind: kind, height: height)
     }
 }
 
 private struct PillButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let kind: PillButtonStyle.Kind
+    let height: CGFloat
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         configuration.label
-            .font(.body.weight(.medium))
-            .tracking(0.3)
+            .font(.system(size: height > 40 ? 15 : 13, weight: .medium))
             .lineLimit(1)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 15)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: height)
             .foregroundStyle(foreground)
-            .background {
-                switch kind {
-                case .primary: Capsule().fill(Theme.charcoal)
-                case .alarm: Capsule().fill(Theme.brick)
-                case .quiet: Capsule().fill(Theme.linen)
-                case .secondary: Capsule().strokeBorder(Theme.graphite, lineWidth: 1)
-                }
-            }
-            .opacity(!isEnabled ? 0.35 : configuration.isPressed ? 0.7 : 1)
+            .background(Capsule().fill(fill))
+            .overlay(Capsule().strokeBorder(border, lineWidth: 1))
+            .opacity(isEnabled ? 1 : 0.55)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+
+    private var pressed: Bool { configuration.isPressed }
+
+    private var fill: Color {
+        switch kind {
+        case .primary: pressed ? Color(hex: 0xE4E4E7) : Theme.text
+        case .secondary: pressed ? Theme.surfaceHover : Theme.surface
+        case .alarm: pressed ? Theme.down.opacity(0.18) : Theme.downTint
+        }
+    }
+
+    private var border: Color {
+        switch kind {
+        case .primary: .clear
+        case .secondary: pressed ? Theme.lineStrong : Theme.line
+        case .alarm: Theme.down.opacity(0.45)
+        }
     }
 
     private var foreground: Color {
         switch kind {
-        case .primary, .alarm: Theme.paper
-        case .secondary, .quiet: Theme.graphite
+        case .primary: Theme.bg
+        case .secondary: Theme.text
+        case .alarm: Theme.down
         }
+    }
+}
+
+/// A card: 16 pt radius, surface fill, hairline border.
+struct CardBackground: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Theme.surface)
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
+    }
+}
+
+/// Status dot. When `pulsing`, a soft halo grows 0.6x to 1.7x and fades on a 2.4 s loop.
+struct PulsingDot: View {
+    let color: Color
+    var pulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            if pulsing && !reduceMotion {
+                TimelineView(.animation) { context in
+                    let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4
+                    Circle()
+                        .fill(color.opacity(0.45 * (1 - phase)))
+                        .frame(width: 7, height: 7)
+                        .scaleEffect(0.6 + 1.1 * phase)
+                }
+            }
+            Circle().fill(color).frame(width: 7, height: 7)
+        }
+        .frame(width: 14, height: 14)
+        .accessibilityHidden(true)
     }
 }
