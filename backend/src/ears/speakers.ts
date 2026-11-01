@@ -100,6 +100,9 @@ export class SpeakerModel {
       return { speaker, position: null, how: "voice" };
     }
 
+    // With both voices calibrated, loudness is a worse guess than Jev reading the words.
+    if (me && them) return { speaker: "unknown", position: null, how: "none" };
+
     const level = levelDb ?? print?.mean[LEVEL] ?? null;
     if (this.myLevelDb !== null && level !== null) {
       return {

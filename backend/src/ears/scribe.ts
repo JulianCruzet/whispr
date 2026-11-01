@@ -31,6 +31,8 @@ const BYTES_PER_SECOND = SAMPLE_RATE * 2;
 const MAX_QUEUED_CHUNKS = 50; // ~5 s of audio while (re)connecting
 /** Audio kept for voiceprints, at ~100 ms per chunk. */
 const KEEP_CHUNKS = 900;
+/** The room's noise level is taken from this much recent audio (~30 s). */
+const NOISE_FLOOR_CHUNKS = 300;
 /** Scribe sends the plain commit just before the timestamped one; wait briefly for the latter. */
 const TIMESTAMPS_GRACE_MS = 250;
 const URL_PARAMS = new URLSearchParams({
@@ -98,6 +100,16 @@ export class ScribeSession extends EventEmitter {
     this.queue.push(chunk);
     if (this.queue.length > MAX_QUEUED_CHUNKS) this.queue.shift();
     if (!this.ws) this.connect();
+  }
+
+  /**
+   * The room's noise level: the quietest tenth of the last ~30 s of audio, which holds the
+   * pauses between turns. Null until there's ~3 s of audio.
+   */
+  noiseFloorDb(): number | null {
+    const recent = this.sent.slice(-NOISE_FLOOR_CHUNKS).map((c) => c.db);
+    if (recent.length < 30) return null;
+    return recent.sort((a, b) => a - b)[Math.floor(recent.length * 0.1)];
   }
 
   /** The audio sent between two points on Scribe's timeline (to the nearest ~100 ms). */
