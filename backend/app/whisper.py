@@ -65,6 +65,11 @@ def cap_words(line: str, limit: int = MAX_WHISPER_WORDS) -> str:
     return capped[: ends[-1]].rstrip(",") if ends else capped
 
 
+def drop_trailing_instruction(line: str) -> str:
+    # Haiku sometimes ends with "and name a song", which leaves the wearer to do the thinking.
+    return re.sub(r",?\s+(?:and|then)\s+(?:name|pick|mention)\s+(?:a|an|one|the|some)\b.*$", "", line, flags=re.IGNORECASE)
+
+
 async def write_whisper(
     client: anthropic.AsyncAnthropic,
     settings: Settings,
@@ -77,7 +82,7 @@ async def write_whisper(
     lines = [line for line in (text or "").splitlines() if line.strip()]
     if not lines:
         return None
-    shown = cap_words(clean_line(lines[0]))
+    shown = cap_words(drop_trailing_instruction(clean_line(lines[0])))
     if not shown:
         return None
     # If Haiku wrote only one line, the ear gets the whole thing, as before.
