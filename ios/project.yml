@@ -9,7 +9,7 @@ settings:
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
     # Set your team in Xcode (Signing & Capabilities) or here.
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: 88B25A43QT
 targets:
   Whispr:
     type: application
@@ -23,10 +23,13 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
+        # Default backend for fresh installs; override with xcodebuild WHISPR_BACKEND_URL=wss://.../ws
+        WHISPR_BACKEND_URL: ws://localhost:8787/ws
     info:
       path: Whispr/Info.plist
       properties:
         CFBundleDisplayName: Whispr
+        WhisprBackendURL: $(WHISPR_BACKEND_URL)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [audio]

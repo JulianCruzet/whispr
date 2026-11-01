@@ -66,10 +66,17 @@ struct ContentView: View {
     }
 
     private var listenButton: some View {
-        Button(model.listening ? "Stop" : "Start listening") { model.toggleListening() }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(model.connection != .connected)
+        VStack(spacing: 6) {
+            if model.listening && !model.route.isEmpty {
+                Text(model.route)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button(model.listening ? "Stop" : "Start listening") { model.toggleListening() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(model.connection != .connected)
+        }
     }
 
     private var connectionDot: some View {

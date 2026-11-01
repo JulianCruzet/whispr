@@ -22,7 +22,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Microphone")
                 } footer: {
-                    Text("If the AirPods can't hear the other person, switch to the iPhone mic. Whispers still play in the AirPods.")
+                    Text("If your headphones can't hear the other person, switch to the iPhone mic. Whispers still play in your headphones.")
                 }
                 Section("Test") {
                     Button("Fake: \"Wait, you saw Laufey live?\"") {
