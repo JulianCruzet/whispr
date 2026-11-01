@@ -54,6 +54,12 @@ export class SpeakerModel {
     return { me: this.samples.me !== null || this.myLevelDb !== null, them: this.samples.them !== null };
   }
 
+  /** Forgets both voices. */
+  reset() {
+    this.samples = { me: null, them: null };
+    this.myLevelDb = null;
+  }
+
   /** Learns one voice from a line known to be theirs. Returns false if the line was unusable. */
   calibrate(who: Who, print: Voiceprint | null, levelDb: number | null): boolean {
     const usable = print !== null && print.seconds >= MIN_SAMPLE_SECONDS;

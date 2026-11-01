@@ -135,7 +135,7 @@ struct ContentView: View {
             CalibrationPrompt(
                 step: who == .me ? "1/2" : "2/2",
                 text: model.calibrationLength == .demo
-                    ? (who == .me ? "Talk for 15 seconds in your normal voice" : "Get them talking for 15 seconds")
+                    ? (who == .me ? "Talk normally until the bar fills" : "Get them talking until the bar fills")
                     : (who == .me ? "Talk for a few seconds in your normal voice" : "Get them talking for a few seconds"),
                 heard: heard,
                 target: target

@@ -12,10 +12,15 @@ import type { ClientMessage, ServerEvent, Speaker } from "./protocol.js";
 import { speak, TTS_SAMPLE_RATE } from "./voice/tts.js";
 
 /**
- * Calibration listens across lines until it has this much of the person's speech. The
- * wearer's sample is what every line is measured against, so it gets the longer one.
+ * Calibration listens across lines until the person has talked this long (from Scribe's
+ * word times, so it matches how long they spoke). The wearer's sample is what every line
+ * is measured against, so it gets the longer one.
  */
-const CALIBRATION_TARGET_SECONDS: Record<Who, number> = { me: 4, them: 3 };
+const CALIBRATION_TARGET_SECONDS: Record<Who, number> = { me: 6, them: 5 };
+/** Learning a voice from Jev's verdicts needs this much speech in the sample itself. */
+const LEARN_TARGET_SECONDS: Record<Who, number> = { me: 4, them: 3 };
+/** How often the live calibration progress goes to the phone while someone talks. */
+const PROGRESS_EVERY_MS = 250;
 /** ...and gives up after this many lines, keeping the sample if it has at least the minimum. */
 const CALIBRATION_MAX_LINES = 4;
 /** A longer calibration the phone asks for (say 15 s for a demo) is capped at this. */
@@ -52,6 +57,11 @@ export class PhoneSession {
     lines: number;
     skipped: number;
     levels: number[];
+    /** Seconds talked in the lines kept so far. */
+    talked: number;
+    /** When Scribe started hearing the line in progress (ms), for live progress. */
+    lineStartedAt: number | null;
+    lastProgressAt: number;
   } | null = null;
   /** Lines sent to the brain and not yet echoed back, to match its verdict to our transcript id. */
   /** Lines waiting for Jev's verdict; `audio` is kept for unplaced lines, to learn the voice. */
@@ -73,8 +83,10 @@ export class PhoneSession {
     private ws: WebSocket,
     private publicBaseUrl = `http://localhost:${config.port}`,
   ) {
-    this.scribe.on("partial", (text) =>
-      this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" }),
+    this.scribe.on("partial", (text) => {
+      this.send({ type: "transcript", id: "partial", text, final: false, speaker: "unknown" });
+      if (this.calibrating) this.liveProgress();
+    },
     );
     this.scribe.on("committed", (text, segment) => this.onCommitted(text, segment));
     this.scribe.on("error", (message) => this.send({ type: "error", message }));
@@ -134,7 +146,17 @@ export class PhoneSession {
         lines: 0,
         skipped: 0,
         levels: [],
+        talked: 0,
+        lineStartedAt: null,
+        lastProgressAt: 0,
       };
+    }
+    if (msg.type === "clear_calibration") {
+      this.calibrating = null;
+      this.speakers.reset();
+      this.learning = { me: [], them: [] };
+      this.learningMisses = { me: 0, them: 0 };
+      console.log(`[${this.id.slice(0, 8)}] cleared both voices`);
     }
     if (msg.type === "hello" && msg.deviceId) this.restoreSpeakers(msg.deviceId);
     if (msg.type === "set_persona" && msg.persona) this.brain.setPersona(msg.persona);
@@ -167,7 +189,10 @@ export class PhoneSession {
     // the two voices are simply very alike.
     if (sampling.who === "them" && sampling.skipped < sampling.maxSkips && print && this.speakers.couldBe("me", print)) {
       sampling.skipped++;
+      sampling.lineStartedAt = null;
       console.log(`${tag} calibrating them: skipped a line in the wearer's voice`);
+      // The live bar counted this line; put it back.
+      this.send({ type: "calibrating", who: sampling.who, seconds: sampling.talked, target: sampling.target });
       this.onTurn(text, "me");
       return;
     }
@@ -176,13 +201,16 @@ export class PhoneSession {
     if (audio) sampling.audio.push(audio);
     if (levelDb !== null) sampling.levels.push(levelDb);
     sampling.lines++;
+    if (words) sampling.talked += words[words.length - 1].end - words[0].start;
+    sampling.lineStartedAt = null;
     const sample = sampling.audio.length ? voiceprint(Buffer.concat(sampling.audio)) : null;
+    // `seconds` is speech in the sample itself (pauses and breaths don't count).
     const seconds = sample?.seconds ?? 0;
-    const { target } = sampling;
-    this.send({ type: "calibrating", who: sampling.who, seconds, target });
+    const { target, talked } = sampling;
+    this.send({ type: "calibrating", who: sampling.who, seconds: talked, target });
     this.onTurn(text, sampling.who);
 
-    if (seconds < target && sampling.lines < sampling.maxLines) return;
+    if (talked < target && sampling.lines < sampling.maxLines) return;
     this.calibrating = null;
     const level = sampling.levels.length ? sampling.levels.reduce((a, b) => a + b, 0) / sampling.levels.length : null;
     // A "them" sample that is really the wearer would turn every line into a coin toss.
@@ -193,7 +221,8 @@ export class PhoneSession {
           ? "sounds_like_you"
           : null;
     const ok = reason === null && this.speakers.calibrate(sampling.who, sample, level);
-    console.log(`${tag} calibrated ${sampling.who}: ${ok ? `${seconds.toFixed(1)}s from ${sampling.lines} lines` : `failed (${reason ?? "unusable"}, ${seconds.toFixed(1)}s)`}`);
+    const heard = `${talked.toFixed(1)}s talking, ${seconds.toFixed(1)}s of voice`;
+    console.log(`${tag} calibrated ${sampling.who}: ${ok ? `${heard} from ${sampling.lines} lines` : `failed (${reason ?? "unusable"}, ${heard})`}`);
     this.send({ type: "calibrated", who: sampling.who, ok, ...(ok ? {} : { reason: reason ?? "too_short" }) });
   }
 
@@ -240,6 +269,17 @@ export class PhoneSession {
     this.onTurn(text, verdict.speaker, audio);
   }
 
+  /** While someone talks during calibration, moves the bar before Scribe finishes the line. */
+  private liveProgress() {
+    const sampling = this.calibrating!;
+    const now = Date.now();
+    sampling.lineStartedAt ??= now;
+    if (now - sampling.lastProgressAt < PROGRESS_EVERY_MS) return;
+    sampling.lastProgressAt = now;
+    const seconds = Math.min(sampling.talked + (now - sampling.lineStartedAt) / 1000, sampling.target);
+    this.send({ type: "calibrating", who: sampling.who, seconds, target: sampling.target });
+  }
+
   /**
    * Without calibration, learns a voice from lines Jev is sure about: once there's as much
    * speech as calibration would take, it becomes that voice's sample.
@@ -259,7 +299,7 @@ export class PhoneSession {
     this.learningMisses[who] = 0;
     this.learning[who].push(audio);
     const sample = voiceprint(Buffer.concat(this.learning[who]));
-    if (!sample || sample.seconds < CALIBRATION_TARGET_SECONDS[who]) return;
+    if (!sample || sample.seconds < LEARN_TARGET_SECONDS[who]) return;
     const lines = this.learning[who].length;
     this.learning[who] = [];
     if (who === "them" && this.speakers.soundsLike("me", sample)) return;
