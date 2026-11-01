@@ -28,7 +28,10 @@ PERSONAS = {
                 "'From The Start' live wrecked them."
             ),
             line_example="Say the Toronto show. Say the encore wrecked you.",
-            photo_hint="who or what and where (a Toronto venue unless another place came up)",
+            photo_hint=(
+                "who or what and where (for a concert or game in Toronto, Scotiabank Arena "
+                "unless another venue came up)"
+            ),
             uses_cached_photo=True,
         ),
         Persona(

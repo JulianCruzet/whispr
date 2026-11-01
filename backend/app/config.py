@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     whisper_cooldown_s: float = 5.0
     photo_cooldown_s: float = 30.0
     photo_deadline_s: float = 5.0
-    default_photo_query: str = "Laufey concert Scotiabank Arena Toronto"
 
     @property
     def base_url(self) -> str:
